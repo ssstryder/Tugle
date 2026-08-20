@@ -887,6 +887,10 @@ function desenhar(){
   };
 }
 function palavraTravada(w){ return !!(w && resolvido[w.entradaId]); }
+function casaTravada(k){
+  var c = celulas[k];
+  return !!(c && ((c.across && resolvido[c.across.entradaId]) || (c.down && resolvido[c.down.entradaId])));
+}
 
 function atualizar(){
   var w = palavraAtual(), doPalavra = {};
@@ -977,7 +981,10 @@ function verificarSeCompleta(w){
     setTimeout(function(){
       cs.forEach(function(p){
         var k = p.r+","+p.c;
-        if (erroTemporario[k]){ delete erroTemporario[k]; delete resposta[k]; }
+        if (erroTemporario[k]){
+          delete erroTemporario[k];
+          if (!casaTravada(k)) delete resposta[k];
+        }
       });
       sel = { r: cs[0].r, c: cs[0].c };
       atualizar();
@@ -987,19 +994,22 @@ function verificarSeCompleta(w){
 function escrever(l){
   if (!sel) return;
   var k = sel.r+","+sel.c; if (!celulas[k]) return;
+  if (casaTravada(k)){ avancar(1); atualizar(); return; }
   var w = palavraAtual();
-  if (palavraTravada(w)) return;
   resposta[k]=l;
   verificarSeCompleta(w);
   avancar(1); atualizar();
 }
 function apagar(){
   if (!sel) return;
-  var w = palavraAtual();
-  if (palavraTravada(w)) return;
   var k = sel.r+","+sel.c;
+  if (casaTravada(k)) return;
   if (resposta[k]) delete resposta[k];
-  else { avancar(-1); delete resposta[sel.r+","+sel.c]; }
+  else {
+    avancar(-1);
+    var kAnt = sel.r+","+sel.c;
+    if (!casaTravada(kAnt)) delete resposta[kAnt];
+  }
   atualizar();
 }
 function mover(dr,dc){
