@@ -25,6 +25,7 @@ import re
 import unicodedata
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -40,7 +41,30 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 LISBOA = ZoneInfo("Europe/Lisbon")
 DEEZER = "https://api.deezer.com"
-BASE_DE_DADOS = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///tugle.db")
+def preparar_url_bd(url: str) -> tuple[str, dict]:
+    """Aceita a morada tal como os serviços de Postgres a dão (ex.: Neon,
+    Supabase) e ajusta-a para o que o SQLAlchemy assíncrono precisa:
+    driver 'asyncpg' explícito, e SSL passado corretamente em vez de na
+    query string (onde o asyncpg às vezes não o percebe bem)."""
+    if url.startswith("postgres://"):
+        url = "postgresql+asyncpg://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+
+    if "+asyncpg" not in url:
+        return url, {}
+
+    partes = urlsplit(url)
+    query = dict(parse_qsl(partes.query))
+    query.pop("sslmode", None)
+    query.pop("ssl", None)
+    url_limpo = urlunsplit((partes.scheme, partes.netloc, partes.path, urlencode(query), partes.fragment))
+    return url_limpo, {"ssl": "require"}
+
+
+BASE_DE_DADOS, _connect_args = preparar_url_bd(
+    os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///tugle.db")
+)
 DIAS_ATE_REPETIR = 45      # uma faixa só volta a sair passado este tempo
 TAMANHO_MINIMO_CATALOGO = 1000
 ENTRADAS_POR_PUZZLE = 16
@@ -254,7 +278,7 @@ class PuzzleGuardado(Base):
     conteudo: Mapped[dict] = mapped_column(JSON)
 
 
-engine = create_async_engine(BASE_DE_DADOS)
+engine = create_async_engine(BASE_DE_DADOS, connect_args=_connect_args)
 Sessao = async_sessionmaker(engine, expire_on_commit=False)
 
 
@@ -518,7 +542,8 @@ async def tempo_de_vida(app: FastAPI):
 
 app = FastAPI(title="Tugle", lifespan=tempo_de_vida)
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"],
+    CORSMiddleware, allow_origins=["https://tugle.onrender.com"],
+    allow_methods=["GET", "POST"], allow_headers=["*"],
 )
 
 FaixasEmMemoria: dict[str, bytes] = {}
