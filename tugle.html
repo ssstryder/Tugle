@@ -979,6 +979,7 @@ function verificarSeCompleta(w){
         var k = p.r+","+p.c;
         if (erroTemporario[k]){ delete erroTemporario[k]; delete resposta[k]; }
       });
+      sel = { r: cs[0].r, c: cs[0].c };
       atualizar();
     }, 650);
   }
