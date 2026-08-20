@@ -1,0 +1,6 @@
+fastapi[standard]
+httpx
+sqlalchemy
+greenlet
+aiosqlite
+apscheduler

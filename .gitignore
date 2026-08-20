@@ -1,0 +1,15 @@
+# Ambiente virtual Python
+.venv/
+__pycache__/
+*.pyc
+
+# Base de dados local (o catálogo e os puzzles gerados — não faz sentido ir para o Git)
+tugle.db
+tugle.db-journal
+
+# Ficheiros do sistema
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
