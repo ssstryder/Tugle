@@ -543,7 +543,8 @@ async def tempo_de_vida(app: FastAPI):
 
 app = FastAPI(title="Tugle", lifespan=tempo_de_vida)
 app.add_middleware(
-    CORSMiddleware, allow_origins=["https://tugle.onrender.com"],
+    CORSMiddleware,
+    allow_origins=["https://www.tugle.pt", "https://tugle.pt", "https://tugle.onrender.com"],
     allow_methods=["GET", "POST"], allow_headers=["*"],
 )
 

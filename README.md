@@ -2,11 +2,11 @@
 
 Palavras cruzadas diárias com música portuguesa. Ouves um excerto, escreves o que reconheces, as respostas cruzam-se numa grelha nova a cada meia-noite.
 
-**→ [Ver o site](#)** — atualiza este link depois do deploy na Render.
+**→ [Ver o site](https://www.tugle.pt)**
 
 ---
 
-## Como funciona
+## Como é
 
 - **Início** — ecrã de entrada, só com o botão Começar.
 - **Jogar** — a grelha do dia, com um disco de vinil a tocar o excerto e uma pista de texto (artista, década, género) para cada entrada.
