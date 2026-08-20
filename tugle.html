@@ -326,6 +326,7 @@
     </button>
     <nav class="abas">
       <button class="aba ativa" data-vista="jogar">Jogar</button>
+      <button class="aba" data-vista="editor">Editor</button>
       <div class="check-dropdown">
         <button class="aba" id="b-check-menu" aria-haspopup="true" aria-expanded="false">Check</button>
         <div class="check-menu" id="check-menu">
@@ -386,6 +387,70 @@
         <div><h3>Horizontais</h3><ol id="lista-h"></ol></div>
         <div><h3>Verticais</h3><ol id="lista-v"></ol></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ EDITOR ============ -->
+  <section id="vista-editor" class="esconde">
+
+    <div class="seccao">
+      <h2>Procurar música</h2>
+      <p class="ajuda">
+        Escreve o nome de uma música ou de um artista. Cada resultado traz o excerto,
+        a capa e os dados da faixa — escolhes se a resposta na grelha é o título ou o artista.
+      </p>
+      <div class="barra">
+        <input type="search" id="busca" class="cresce" placeholder="Ex.: Ornatos Violeta, Amália, Slow J…">
+        <select id="fonte"><option value="deezer">Deezer</option><option value="itunes">iTunes</option></select>
+        <button class="btn primario" id="b-buscar">Procurar</button>
+        <button class="btn" id="b-topo">Top do artista</button>
+      </div>
+      <div class="barra" style="margin-bottom:0">
+        <input type="text" id="playlist" class="cresce" placeholder="Ou cola o link de uma playlist do Deezer">
+        <button class="btn" id="b-playlist">Importar</button>
+      </div>
+      <div id="estado-busca"></div>
+      <div class="achados" id="achados"></div>
+    </div>
+
+    <div class="seccao">
+      <h2>Palavras cruzadas</h2>
+      <p class="ajuda">
+        As respostas entram sem acentos nem espaços: “Ó Gente da Minha Terra” fica OGENTEDAMINHATERRA.
+      </p>
+      <div class="barra">
+        <input type="text" id="nome-puzzle" class="cresce" placeholder="Nome do puzzle">
+        <select id="sel-editar"></select>
+        <button class="btn" id="b-novo">Novo</button>
+        <button class="btn suave" id="b-eliminar">Eliminar</button>
+      </div>
+      <div class="linha cabecalhos">
+        <span>Resposta</span><span>Pista</span><span>Áudio</span><span>Início s</span><span>Dur. s</span><span></span>
+      </div>
+      <div id="linhas"></div>
+      <div class="barra" style="margin-top:14px">
+        <button class="btn" id="b-add">+ Entrada em branco</button>
+        <button class="btn primario" id="b-gerar">Gerar grelha e guardar</button>
+        <button class="btn suave" id="b-exportar">Exportar JSON</button>
+        <button class="btn suave" id="b-importar">Importar JSON</button>
+        <input type="file" id="ficheiro-json" accept="application/json,.json" class="esconde">
+      </div>
+      <div id="resultado"></div>
+    </div>
+
+    <div class="seccao">
+      <h2>Apontar para outro servidor</h2>
+      <p class="ajuda">
+        Não precisas de mexer aqui: quando o <code>backend.py</code> serve esta própria página
+        (é assim que deves publicar o site), o jogo já sabe onde estão os dados. Este campo só
+        serve para testares localmente com um backend diferente do que serviu esta página.
+      </p>
+      <div class="barra" style="margin-bottom:0">
+        <input type="url" id="backend" class="cresce" placeholder="https://outro-servidor.onrender.com">
+        <button class="btn" id="b-testar">Testar ligação</button>
+        <button class="btn suave" id="b-regenerar">Forçar novo puzzle de hoje</button>
+      </div>
+      <div id="estado-backend"></div>
     </div>
   </section>
 
@@ -483,6 +548,73 @@ function baseURL(){
   return config.backend ? config.backend.replace(/\/+$/,"") : "";
 }
 
+function jsonp(url, deezer){
+  return new Promise(function(res, rej){
+    var cb = "cst_"+Math.random().toString(36).slice(2);
+    var s = document.createElement("script");
+    var limpar = function(){ delete window[cb]; if (s.parentNode) s.remove(); };
+    window[cb] = function(d){ res(d); limpar(); };
+    s.onerror = function(){ rej(new Error("jsonp")); limpar(); };
+    s.src = url + (url.indexOf("?")>-1?"&":"?") + (deezer?"output=jsonp&":"") + "callback=" + cb;
+    document.body.appendChild(s);
+    setTimeout(function(){ if (window[cb]){ rej(new Error("tempo")); limpar(); } }, 9000);
+  });
+}
+function viaProxyPublico(url){
+  return fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url)).then(function(r){
+    if (!r.ok) throw new Error("proxy"); return r.json();
+  });
+}
+async function pedirDeezer(caminho){
+  try {
+    var r = await fetch(baseURL() + "/deezer/" + caminho);
+    if (r.ok) return r.json();
+  } catch(e){}
+  var url = "https://api.deezer.com/" + caminho;
+  try { return await jsonp(url, true); } catch(e){}
+  try { return await fetch(url).then(function(r){ return r.json(); }); } catch(e){}
+  return viaProxyPublico(url);
+}
+async function pedirItunes(params){
+  try {
+    var r = await fetch(baseURL() + "/itunes?" + params);
+    if (r.ok) return r.json();
+  } catch(e){}
+  var url = "https://itunes.apple.com/search?media=music&entity=song&country=PT&limit=24&" + params;
+  try { return await jsonp(url, false); } catch(e){}
+  try { return await fetch(url).then(function(r){ return r.json(); }); } catch(e){}
+  return viaProxyPublico(url);
+}
+function deDeezer(t){
+  return { titulo:limparTitulo(t.title_short||t.title), artista:(t.artist||{}).name||"",
+           album:(t.album||{}).title||"", capa:(t.album||{}).cover_medium||"", audio:t.preview||"" };
+}
+function deItunes(t){
+  return { titulo:limparTitulo(t.trackName), artista:t.artistName||"", album:t.collectionName||"",
+           capa:(t.artworkUrl100||"").replace("100x100","300x300"), audio:t.previewUrl||"" };
+}
+async function procurar(termo){
+  if (el("#fonte").value === "itunes"){
+    var d = await pedirItunes("term=" + encodeURIComponent(termo));
+    return (d.results||[]).map(deItunes);
+  }
+  var r = await pedirDeezer("search?limit=24&q=" + encodeURIComponent(termo));
+  return (r.data||[]).map(deDeezer);
+}
+async function topArtista(nome){
+  var b = await pedirDeezer("search/artist?limit=1&q=" + encodeURIComponent(nome));
+  var art = (b.data||[])[0];
+  if (!art) return [];
+  var t = await pedirDeezer("artist/" + art.id + "/top?limit=25");
+  return (t.data||[]).map(deDeezer);
+}
+async function importarPlaylist(txt){
+  var m = String(txt).match(/(\d{5,})/);
+  if (!m) throw new Error("id");
+  var p = await pedirDeezer("playlist/" + m[1]);
+  return ((p.tracks||{}).data||[]).map(deDeezer);
+}
+
 /* ============ gerador de grelha ============ */
 function gerarGrelha(entradas){
   var itens = entradas.map(function(e){ return { entradaId:e.id, palavra:normalizar(e.resposta) }; })
@@ -566,7 +698,7 @@ function gerarGrelha(entradas){
 }
 
 /* ============ estado de jogo ============ */
-var puzzles = [], atual = null;
+var puzzles = [], atual = null, editando = null;
 var celulas = {}, resposta = {}, sel = null, dir = "across";
 var resolvido = {};   // entradaId -> true
 window.tugleDebug = function(){
@@ -1064,6 +1196,189 @@ async function calcularStreak(){
   return streak;
 }
 
+/* ============ pesquisa no editor ============ */
+function mostrarFaixas(lista){
+  var box = el("#achados"); box.innerHTML = "";
+  if (!lista.length){
+    el("#estado-busca").innerHTML = '<div class="aviso neutro">Nada encontrado. Tenta outra grafia ou muda de fonte.</div>';
+    return;
+  }
+  lista.forEach(function(f){
+    var d = criar("div","faixa" + (f.audio?"":" sem"));
+    var img = criar("img"); img.src = f.capa || ""; img.alt = ""; d.appendChild(img);
+    var meta = criar("div","meta");
+    meta.appendChild(criar("div","t",f.titulo));
+    meta.appendChild(criar("div","a",f.artista));
+    var acoes = criar("div","acoes");
+    var bt = criar("button",null,"título");   bt.onclick = function(){ adicionar(f,"titulo"); };
+    var ba = criar("button",null,"artista");  ba.onclick = function(){ adicionar(f,"artista"); };
+    acoes.appendChild(bt); acoes.appendChild(ba);
+    if (f.audio){
+      var bo = criar("button","mudo","ouvir");
+      bo.onclick = function(){ tocar({audio:f.audio,dur:8}); };
+      acoes.appendChild(bo);
+    }
+    meta.appendChild(acoes); d.appendChild(meta); box.appendChild(d);
+  });
+}
+function adicionar(f, campo){
+  var resp = campo==="titulo" ? f.titulo : f.artista;
+  var pista = campo==="titulo"
+    ? "Que música é esta, de " + f.artista + "?"
+    : "Quem canta \u201C" + f.titulo + "\u201D?";
+  editando.entradas.push({
+    id:id(), resposta:resp, pista:pista, audio:f.audio||"", inicio:0, dur:8,
+    titulo:f.titulo, artista:f.artista, capa:f.capa
+  });
+  desenharEditor();
+  el("#estado-busca").innerHTML = '<div class="aviso bom">Adicionado: '+resp+' ('+normalizar(resp).length+' letras). Falta gerar a grelha.</div>';
+}
+async function correr(fn, msgOcupado){
+  el("#estado-busca").innerHTML = '<div class="aviso neutro">'+msgOcupado+'</div>';
+  el("#achados").innerHTML = "";
+  try {
+    var r = await fn();
+    el("#estado-busca").innerHTML = "";
+    mostrarFaixas(r);
+  } catch(e){
+    el("#estado-busca").innerHTML = '<div class="aviso mau">A pesquisa não chegou ao destino. Liga o servidor no painel lá em baixo, ou tenta a fonte iTunes.</div>';
+  }
+}
+el("#b-buscar").onclick = function(){
+  var t = el("#busca").value.trim(); if (!t) return;
+  correr(function(){ return procurar(t); }, "A procurar…");
+};
+el("#busca").addEventListener("keydown", function(e){ if (e.key==="Enter") el("#b-buscar").click(); });
+el("#b-topo").onclick = function(){
+  var t = el("#busca").value.trim(); if (!t) return;
+  el("#fonte").value = "deezer";
+  correr(function(){ return topArtista(t); }, "A ir buscar as faixas mais ouvidas…");
+};
+el("#b-playlist").onclick = function(){
+  var t = el("#playlist").value.trim(); if (!t) return;
+  correr(function(){ return importarPlaylist(t); }, "A ler a playlist…");
+};
+
+el("#backend").oninput = async function(){
+  config.backend = this.value.trim();
+  await loja.set(CHAVE_CFG, JSON.stringify(config));
+};
+el("#b-testar").onclick = async function(){
+  var caixa = el("#estado-backend");
+  caixa.innerHTML = '<div class="aviso neutro">A testar…</div>';
+  try {
+    var r = await pedirDeezer("search?limit=1&q=amalia");
+    caixa.innerHTML = (r.data||[]).length
+      ? '<div class="aviso bom">Ligação de pé'+(config.backend?" pelo teu servidor":" sem servidor")+'. Podes procurar.</div>'
+      : '<div class="aviso mau">Respondeu, mas sem resultados.</div>';
+  } catch(e){
+    caixa.innerHTML = '<div class="aviso mau">Sem resposta. Confirma o endereço, ou usa a fonte iTunes.</div>';
+  }
+};
+el("#b-regenerar").onclick = async function(){
+  var caixa = el("#estado-backend");
+  caixa.innerHTML = '<div class="aviso neutro">A gerar de novo… pode demorar se o catálogo ainda estiver a crescer.</div>';
+  try {
+    var r = await fetch(baseURL() + "/puzzle/hoje/regenerar", { method:"POST" });
+    if (!r.ok) throw new Error("estado "+r.status);
+    caixa.innerHTML = '<div class="aviso bom">Puzzle de hoje refeito. Vai à aba Jogar e carrega em “Puzzle de hoje”.</div>';
+  } catch(e){
+    caixa.innerHTML = '<div class="aviso mau">Não consegui regenerar. Confirma o servidor.</div>';
+  }
+};
+
+/* ============ editor ============ */
+function linhaEditor(e){
+  var d = criar("div","linha");
+  var r = criar("input"); r.type="text"; r.placeholder="Resposta"; r.value=e.resposta||"";
+  r.oninput = function(){ e.resposta = r.value; };
+  var p = criar("input"); p.type="text"; p.placeholder="Pista"; p.value=e.pista||"";
+  p.oninput = function(){ e.pista = p.value; };
+
+  var estadoAudio = criar("div", null, e.audio ? "com áudio" : "sem áudio");
+  estadoAudio.style.font = "500 11px/1.2 var(--sans)";
+  estadoAudio.style.color = e.audio ? "#3E7A4E" : "rgba(var(--tinta-rgb),.4)";
+
+  var i = criar("input"); i.type="number"; i.min="0"; i.value=e.inicio!=null?e.inicio:0;
+  i.oninput = function(){ e.inicio = +i.value||0; };
+  var u = criar("input"); u.type="number"; u.min="1"; u.value=e.dur!=null?e.dur:8;
+  u.oninput = function(){ e.dur = +u.value||8; };
+
+  var acoes = criar("div"); acoes.style.display="flex"; acoes.style.gap="6px"; acoes.style.alignItems="center";
+  if (e.capa){ var cap = criar("img","miniatura"); cap.src = e.capa; cap.alt=""; acoes.appendChild(cap); }
+  if (e.audio){
+    var ouvir = criar("button","apagar","♪");
+    ouvir.style.color="var(--acento)"; ouvir.title="Ouvir";
+    ouvir.onclick = function(){ tocar({audio:e.audio,dur:8}); };
+    acoes.appendChild(ouvir);
+  }
+  var x = criar("button","apagar","×"); x.title="Remover";
+  x.onclick = function(){
+    editando.entradas = editando.entradas.filter(function(o){ return o.id!==e.id; });
+    desenharEditor();
+  };
+  acoes.appendChild(x);
+
+  [r,p,estadoAudio,i,u,acoes].forEach(function(n){ d.appendChild(n); });
+  return d;
+}
+function desenharEditor(){
+  el("#nome-puzzle").value = editando.nome || "";
+  var box = el("#linhas"); box.innerHTML = "";
+  editando.entradas.forEach(function(e){ box.appendChild(linhaEditor(e)); });
+}
+el("#b-add").onclick = function(){
+  editando.entradas.push({ id:id(), resposta:"", pista:"", audio:"", inicio:0, dur:8 });
+  desenharEditor();
+};
+el("#nome-puzzle").oninput = function(){ editando.nome = this.value; };
+el("#b-gerar").onclick = async function(){
+  var g = gerarGrelha(editando.entradas), out = el("#resultado");
+  if (g.erro){ out.innerHTML = '<div class="aviso mau">'+g.erro+'</div>'; return; }
+  editando.grelha = { linhas:g.linhas, colunas:g.colunas, colocadas:g.colocadas };
+  editando.nome = el("#nome-puzzle").value || "Puzzle sem nome";
+  var i = puzzles.findIndex(function(p){ return p.id===editando.id; });
+  var copia = JSON.parse(JSON.stringify(editando));
+  if (i>-1) puzzles[i] = copia; else puzzles.push(copia);
+  await guardar(); encherSelects();
+  var msg = '<div class="aviso bom">Grelha de '+g.linhas+'×'+g.colunas+', '+g.colocadas.length+' entradas. Guardado.</div>';
+  if (g.falhadas.length) msg += '<div class="aviso mau">Sem letras em comum para encaixar: <b>'+g.falhadas.join(", ")+'</b>.</div>';
+  out.innerHTML = msg;
+  el("#sel-puzzle").value = copia.id; carregar(copia);
+};
+el("#b-novo").onclick = function(){
+  editando = { id:id(), nome:"Novo puzzle", entradas:[] };
+  desenharEditor(); el("#resultado").innerHTML = "";
+};
+el("#b-eliminar").onclick = async function(){
+  puzzles = puzzles.filter(function(p){ return p.id!==editando.id; });
+  await guardar(); encherSelects();
+  if (puzzles[0]){ editando = JSON.parse(JSON.stringify(puzzles[0])); desenharEditor(); carregar(puzzles[0]); }
+  else el("#b-novo").click();
+};
+
+/* ============ ficheiros e link ============ */
+el("#b-exportar").onclick = function(){
+  var blob = new Blob([JSON.stringify(editando,null,2)],{type:"application/json"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (editando.nome||"puzzle").replace(/[^\w-]+/g,"_")+".json";
+  a.click();
+};
+el("#b-importar").onclick = function(){ el("#ficheiro-json").click(); };
+el("#ficheiro-json").onchange = function(){
+  var f = this.files[0]; if (!f) return;
+  var fr = new FileReader();
+  fr.onload = async function(){
+    try {
+      var p = JSON.parse(fr.result); p.id = id();
+      puzzles.push(p); await guardar(); encherSelects();
+      editando = JSON.parse(JSON.stringify(p)); desenharEditor();
+      el("#resultado").innerHTML = '<div class="aviso bom">Importado: '+(p.nome||"sem nome")+'.</div>';
+    } catch(e){ el("#resultado").innerHTML = '<div class="aviso mau">Esse ficheiro não é um puzzle válido.</div>'; }
+  };
+  fr.readAsText(f);
+};
 function paraBase64(t){
   return btoa(String.fromCharCode.apply(null,new TextEncoder().encode(t)))
     .replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
@@ -1084,7 +1399,8 @@ el("#b-partilhar").onclick = function(){
 /* ============ persistência ============ */
 async function guardar(){ await loja.set(CHAVE, JSON.stringify(puzzles)); }
 function encherSelects(){
-  [["#sel-puzzle", function(p){ carregar(p); }]
+  [["#sel-puzzle", function(p){ carregar(p); }],
+   ["#sel-editar", function(p){ editando = JSON.parse(JSON.stringify(p)); desenharEditor(); el("#resultado").innerHTML=""; }]
   ].forEach(function(par){
     var s = el(par[0]), antes = s.value;
     s.innerHTML = "";
@@ -1135,7 +1451,7 @@ function puzzleExemplo(){
 /* ============ navegação ============ */
 function irPara(v){
   document.querySelectorAll(".aba").forEach(function(x){ x.classList.toggle("ativa", x.dataset.vista===v); });
-  ["jogar","sobre","contacto"].forEach(function(nome){
+  ["jogar","editor","sobre","contacto"].forEach(function(nome){
     var s = el("#vista-"+nome);
     if (s) s.classList.toggle("esconde", nome!==v);
   });
@@ -1213,7 +1529,7 @@ el("#cortina-boas-vindas").onclick = function(){ el("#b-fechar-boas-vindas").cli
   mostrarEsqueleto();
 
   var cfg = await loja.get(CHAVE_CFG);
-  if (cfg){ try { config = JSON.parse(cfg); } catch(e){} }
+  if (cfg){ try { config = JSON.parse(cfg); el("#backend").value = config.backend||""; } catch(e){} }
 
   await iniciarVolume();
 
@@ -1236,6 +1552,9 @@ el("#cortina-boas-vindas").onclick = function(){ el("#b-fechar-boas-vindas").cli
 
   encherSelects();
   el("#sel-puzzle").value = atual.id;
+  el("#sel-editar").value = puzzles[0] ? puzzles[0].id : atual.id;
+  editando = JSON.parse(JSON.stringify(puzzles[0] || atual));
+  desenharEditor();
 
   if (location.hash === "#sobre") irPara("sobre");
   else if (location.hash === "#contacto") irPara("contacto");
