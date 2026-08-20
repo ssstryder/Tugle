@@ -31,7 +31,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import Integer, String, select
@@ -68,6 +68,18 @@ BASE_DE_DADOS, _connect_args = preparar_url_bd(
 )
 DIAS_ATE_REPETIR = 45      # uma faixa só volta a sair passado este tempo
 TAMANHO_MINIMO_CATALOGO = 1000
+
+CHAVE_ADMIN = os.environ.get("ADMIN_KEY", "")
+
+
+async def exigir_chave_admin(chave: str | None = None) -> None:
+    """Protege endpoints que alteram ou apagam dados (regenerar puzzle,
+    limpar catálogo). Sem ADMIN_KEY configurada no servidor, estas rotas
+    ficam sempre fechadas — falha em segurança, não em conveniência."""
+    if not CHAVE_ADMIN:
+        raise HTTPException(500, "ADMIN_KEY não está configurada no servidor.")
+    if chave != CHAVE_ADMIN:
+        raise HTTPException(401, "Chave de administração inválida ou em falta.")
 ENTRADAS_POR_PUZZLE = 16
 # A Deezer recorta os 30s de antevisão a começar algures na música, muitas
 # vezes ainda em desvanecimento/intro. Saltar uns segundos costuma aproximar
@@ -614,7 +626,7 @@ async def estado() -> dict:
 
 
 @app.post("/puzzle/hoje/regenerar")
-async def regenerar_hoje() -> dict:
+async def regenerar_hoje(_: None = Depends(exigir_chave_admin)) -> dict:
     """Força uma nova montagem do puzzle de hoje, mesmo que já exista uma
     guardada — útil sempre que o gerador de pistas ou o algoritmo melhora
     e queres que o dia de hoje reflita isso."""
@@ -665,7 +677,7 @@ async def catalogo_resumo() -> dict:
 
 
 @app.post("/catalogo/limpar")
-async def catalogo_limpar(artista: str | None = None) -> dict:
+async def catalogo_limpar(artista: str | None = None, _: None = Depends(exigir_chave_admin)) -> dict:
     """Sem parâmetro: apaga faixas de artistas que já não estão em ARTISTAS.
     Com ?artista=Nome: apaga TODAS as faixas guardadas desse nome, mesmo que
     ainda esteja na lista — útil quando a Deezer confundiu com um homónimo
