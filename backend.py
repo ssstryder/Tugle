@@ -457,26 +457,59 @@ async def garantir_catalogo(minimo: int, limite_por_chamada: int = 25) -> None:
 
 # ---------------------------------------------------------------- montagem do puzzle diário
 
-def pista_para(faixa: "Faixa", semente: str) -> str:
+def escolher_campo_resposta(faixa: "Faixa", semente: str) -> str:
+    """Decide se a resposta desta entrada é o título da música ou o nome
+    do artista — sempre respeitando o limite de 3 a 14 letras da grelha.
+    Se só um dos dois couber, usa esse; se os dois couberem, escolhe ao
+    calhas (de forma estável, por música e por dia)."""
+    titulo_cabe = 3 <= len(normalizar(faixa.titulo)) <= 14
+    artista_cabe = 3 <= len(normalizar(faixa.artista)) <= 14
+    if titulo_cabe and artista_cabe:
+        return random.Random(semente + faixa.id + "campo").choice(["titulo", "artista"])
+    return "artista" if artista_cabe else "titulo"
+
+
+def pista_para(faixa: "Faixa", semente: str, campo: str) -> str:
     """Várias formas de dizer a mesma coisa, escolhida de forma estável
     (a mesma música dá sempre a mesma pista nesse dia, mas dias diferentes
     ou músicas diferentes podem calhar noutro modelo — nunca é sempre a
-    mesma frase robótica)."""
+    mesma frase robótica). Nunca fica vaga a mais (sempre pelo menos um
+    detalhe a identificar: ano OU género), mas também nunca obriga a
+    mencionar sempre o ano.
+    Se a resposta for o artista, a pista descreve a MÚSICA (nunca o
+    artista, senão dava a resposta) — o título entra livremente, porque
+    aí não é ele que está a ser adivinhado."""
     artista = faixa.artista
     decada = faixa.decada
     genero = faixa.genero or None
+    titulo = faixa.titulo
+    aleatorio = random.Random(semente + faixa.id)
 
-    modelos = [f"Uma música de {artista}."]
+    if campo == "artista":
+        modelos = [f"Quem canta “{titulo}”?"]
+        if decada:
+            modelos.append(f"“{titulo}”, lá dos anos {decada}. De quem é?")
+            modelos.append(f"Dos anos {decada}: “{titulo}”. Quem canta?")
+        if genero:
+            modelos.append(f"Um tema de {genero} chamado “{titulo}”. Quem o canta?")
+        if genero and decada:
+            modelos.append(f"“{titulo}”, {genero} dos anos {decada}. De quem é?")
+        return aleatorio.choice(modelos)
+
+    # campo == "titulo": a pista tem de dar pelo menos um detalhe a mais
+    # do que só o nome do artista — nunca fica vaga sozinha.
+    modelos = []
     if decada:
-        modelos.append(f"{artista}, lá dos anos {decada}.")
-        modelos.append(f"Isto é de {artista}, ainda nos anos {decada}.")
-        modelos.append(f"Uma faixa de {artista}, algures nos anos {decada}.")
+        modelos.append(f"{artista}, dos anos {decada}.")
+        modelos.append(f"Uma faixa de {artista}, ainda nos anos {decada}.")
     if genero:
-        modelos.append(f"{genero}, à moda de {artista}.")
-        modelos.append(f"Um tema de {genero}, por {artista}.")
+        modelos.append(f"Um tema de {genero}, de {artista}.")
     if genero and decada:
-        modelos.append(f"{genero} dos anos {decada}, assinado por {artista}.")
-        modelos.append(f"Se é {genero} e é dos anos {decada}, aposta em {artista}.")
+        modelos.append(f"{genero} dos anos {decada}, por {artista}.")
+        modelos.append(f"Se é {genero} e é dos anos {decada}, é de {artista}.")
+    if not modelos:
+        modelos = [f"Uma música de {artista}."]  # só mesmo quando não há mais nenhum dado
+    return aleatorio.choice(modelos)
 
     aleatorio = random.Random(semente + faixa.id)
     return aleatorio.choice(modelos)
@@ -494,9 +527,14 @@ async def montar_puzzle(data: dt.date) -> dict:
         )
         candidatas = list(resultado.scalars().all())
 
-    # títulos muito compridos (30+ letras) costumam ser metadados mal limpos
-    # (nomes de compilação, featurings) e fazem a grelha esticar-se demais
-    candidatas = [f for f in candidatas if 3 <= len(normalizar(f.titulo)) <= 14]
+    # títulos (ou nomes de artista) muito compridos costumam ser metadados
+    # mal limpos e fazem a grelha esticar-se demais — mas só descarta se
+    # NENHUM dos dois servir de resposta (agora a resposta pode ser
+    # qualquer um dos dois, ver escolher_campo_resposta)
+    candidatas = [
+        f for f in candidatas
+        if 3 <= len(normalizar(f.titulo)) <= 14 or 3 <= len(normalizar(f.artista)) <= 14
+    ]
 
     # ignora sempre quem já não está na lista ARTISTAS — evita que alguém
     # removido continue a aparecer só porque ficou guardado no catálogo
@@ -525,11 +563,15 @@ async def montar_puzzle(data: dt.date) -> dict:
     aleatorio.shuffle(candidatas)
     candidatas = candidatas[:ENTRADAS_POR_PUZZLE]
 
-    entradas = [{
-        "id": f.id, "resposta": f.titulo, "titulo": f.titulo, "artista": f.artista,
-        "capa": f.capa, "genero": f.genero, "decada": f.decada,
-        "pista": pista_para(f, data.isoformat()), "inicio": INICIO_EXCERTO_SEGUNDOS,
-    } for f in candidatas]
+    entradas = []
+    for f in candidatas:
+        campo = escolher_campo_resposta(f, data.isoformat())
+        resposta = f.titulo if campo == "titulo" else f.artista
+        entradas.append({
+            "id": f.id, "resposta": resposta, "titulo": f.titulo, "artista": f.artista,
+            "capa": f.capa, "genero": f.genero, "decada": f.decada,
+            "pista": pista_para(f, data.isoformat(), campo), "inicio": INICIO_EXCERTO_SEGUNDOS,
+        })
 
     grelha = gerar_grelha(entradas)
     if grelha.get("erro") or len(grelha.get("colocadas", [])) < 5:
