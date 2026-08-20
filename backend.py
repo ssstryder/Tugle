@@ -69,6 +69,17 @@ BASE_DE_DADOS, _connect_args = preparar_url_bd(
 DIAS_ATE_REPETIR = 45      # uma faixa só volta a sair passado este tempo
 TAMANHO_MINIMO_CATALOGO = 1000
 
+# Dias temáticos: 0=segunda ... 4=sexta ... 6=domingo (dt.date.weekday()).
+# Se não houver faixas suficientes desse tema nesse dia, cai-se sozinho no
+# catálogo normal — nunca bloqueia a geração do puzzle.
+ARTISTAS_FADO = {
+    "Amália Rodrigues", "Mariza", "Carminho", "Ana Moura", "Camané",
+    "Gisela João", "Cuca Roseta", "Raquel Tavares", "Sara Correia",
+}
+DIAS_TEMATICOS: dict[int, tuple[str, set[str]]] = {
+    4: ("Fado", ARTISTAS_FADO),  # sexta-feira
+}
+
 CHAVE_ADMIN = os.environ.get("ADMIN_KEY", "")
 
 
@@ -427,6 +438,16 @@ async def montar_puzzle(data: dt.date) -> dict:
     artistas_atuais = {normalizar(a) for a in ARTISTAS}
     candidatas = [f for f in candidatas if normalizar(f.artista) in artistas_atuais]
 
+    tema_hoje = DIAS_TEMATICOS.get(data.weekday())
+    nome_tema = None
+    if tema_hoje:
+        nome_tema, artistas_tema = tema_hoje
+        tematicas = [f for f in candidatas if f.artista in artistas_tema]
+        if len(tematicas) >= 6:
+            candidatas = tematicas
+        else:
+            nome_tema = None  # não havia o suficiente — segue o catálogo normal, sem tema
+
     if len(candidatas) < 6:
         raise RuntimeError(
             f"O catálogo só tem {len(candidatas)} faixas por usar (título entre 3 e 14 "
@@ -454,8 +475,9 @@ async def montar_puzzle(data: dt.date) -> dict:
 
     return {
         "id": data.isoformat(),
-        "nome": f"Tugle de {data.strftime('%d/%m/%Y')}",
+        "nome": f"Tugle de {data.strftime('%d/%m/%Y')}" + (f" — {nome_tema}" if nome_tema else ""),
         "data": data.isoformat(),
+        "tema": nome_tema,
         "entradas": entradas_finais,
         "grelha": {
             "linhas": grelha["linhas"], "colunas": grelha["colunas"],
@@ -595,6 +617,9 @@ PASTA = Path(__file__).parent
 FICHEIRO_FRONTEND = PASTA / "tugle.html"
 FICHEIRO_INICIO = PASTA / "inicio.html"
 FICHEIRO_FAVICON = PASTA / "favicon.svg"
+FICHEIRO_OG_IMAGE = PASTA / "og-image.png"
+FICHEIRO_ROBOTS = PASTA / "robots.txt"
+FICHEIRO_SITEMAP = PASTA / "sitemap.xml"
 
 
 @app.get("/", include_in_schema=False)
@@ -618,6 +643,27 @@ async def favicon():
     if FICHEIRO_FAVICON.exists():
         return FileResponse(FICHEIRO_FAVICON, media_type="image/svg+xml")
     raise HTTPException(404, "favicon.svg não encontrado")
+
+
+@app.get("/og-image.png", include_in_schema=False)
+async def og_image():
+    if FICHEIRO_OG_IMAGE.exists():
+        return FileResponse(FICHEIRO_OG_IMAGE, media_type="image/png")
+    raise HTTPException(404, "og-image.png não encontrado")
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots():
+    if FICHEIRO_ROBOTS.exists():
+        return FileResponse(FICHEIRO_ROBOTS, media_type="text/plain")
+    raise HTTPException(404, "robots.txt não encontrado")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap():
+    if FICHEIRO_SITEMAP.exists():
+        return FileResponse(FICHEIRO_SITEMAP, media_type="application/xml")
+    raise HTTPException(404, "sitemap.xml não encontrado")
 
 
 @app.get("/estado")

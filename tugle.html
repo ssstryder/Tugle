@@ -1,7 +1,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tugle</title>
+<meta name="description" content="Palavras cruzadas com música portuguesa. Ouve o excerto, escreve o que reconheces. Uma grelha nova todos os dias.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+<meta property="og:title" content="Tugle">
+<meta property="og:description" content="Palavras cruzadas com música portuguesa. Uma grelha nova todos os dias.">
+<meta property="og:image" content="https://www.tugle.pt/og-image.png">
+<meta property="og:url" content="https://www.tugle.pt/jogar">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tugle">
+<meta name="twitter:description" content="Palavras cruzadas com música portuguesa. Uma grelha nova todos os dias.">
+<meta name="twitter:image" content="https://www.tugle.pt/og-image.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -480,7 +491,16 @@
     <button class="aba rodape-link" data-vista="sobre">Sobre</button>
     <span class="rodape-sep">·</span>
     <button class="aba rodape-link" data-vista="contacto">Contacto</button>
+    <span class="rodape-sep">·</span>
+    <button class="aba rodape-link" id="b-abrir-estatisticas">Estatísticas</button>
   </footer>
+</div>
+
+<div class="cortina" id="cortina-estatisticas"></div>
+<div class="boas-vindas" id="estatisticas">
+  <h2>As tuas estatísticas</h2>
+  <div id="conteudo-estatisticas" style="font-size:14px;line-height:1.7;color:rgba(var(--tinta-rgb),.75);margin-bottom:20px"></div>
+  <button class="btn primario" id="b-fechar-estatisticas">Fechar</button>
 </div>
 
 <div class="cortina" id="cortina-boas-vindas"></div>
@@ -1140,7 +1160,7 @@ function verificarVitoria(){
   if (total && feitas >= total){
     if (!caixa.innerHTML){
       montarEcraDeVitoria(caixa);
-      marcarConcluido(atual.id);
+      marcarConcluido(atual.id, !ajudaUsada);
     }
   } else caixa.innerHTML = "";
 }
@@ -1185,7 +1205,7 @@ function partilharResultado(streak){
 async function calcularStreak(){
   var concluidos = await concluidosGuardados();
   var datas = {};
-  concluidos.forEach(function(id){ if (/^\d{4}-\d{2}-\d{2}$/.test(id)) datas[id] = true; });
+  Object.keys(concluidos).forEach(function(id){ if (/^\d{4}-\d{2}-\d{2}$/.test(id)) datas[id] = true; });
   function fmt(d){
     return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
   }
@@ -1487,14 +1507,23 @@ document.querySelectorAll(".aba[data-vista]").forEach(function(b){
 var CHAVE_CONCLUIDOS = "tugle:concluidos";
 async function concluidosGuardados(){
   var s = await loja.get(CHAVE_CONCLUIDOS);
-  try { return s ? JSON.parse(s) : []; } catch(e){ return []; }
+  if (!s) return {};
+  try {
+    var dados = JSON.parse(s);
+    if (Array.isArray(dados)){ // formato antigo: só uma lista de ids
+      var convertido = {};
+      dados.forEach(function(id){ convertido[id] = null; }); // não sabemos se teve ajuda
+      return convertido;
+    }
+    return dados || {};
+  } catch(e){ return {}; }
 }
-async function marcarConcluido(puzzleId){
+async function marcarConcluido(puzzleId, semAjuda){
   if (!puzzleId) return;
-  var lista = await concluidosGuardados();
-  if (lista.indexOf(puzzleId) === -1){
-    lista.push(puzzleId);
-    await loja.set(CHAVE_CONCLUIDOS, JSON.stringify(lista));
+  var dados = await concluidosGuardados();
+  if (!(puzzleId in dados)){
+    dados[puzzleId] = !!semAjuda;
+    await loja.set(CHAVE_CONCLUIDOS, JSON.stringify(dados));
   }
 }
 async function carregarArquivo(){
@@ -1513,7 +1542,7 @@ async function carregarArquivo(){
       var li = criar("li");
       li.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--linha);cursor:pointer;font-size:14px";
       li.appendChild(criar("span",null,item.nome));
-      var marca = criar("span",null, concluidos.indexOf(item.data)>-1 ? "concluído" : "");
+      var marca = criar("span",null, (item.data in concluidos) ? "concluído" : "");
       marca.style.cssText = "font:600 10px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--acento)";
       li.appendChild(marca);
       li.onclick = function(){ abrirDoArquivo(item.data); };
@@ -1575,6 +1604,34 @@ document.addEventListener("keydown", function(ev){
     icones();
   };
 })();
+
+/* ============ estatísticas pessoais ============ */
+async function mostrarEstatisticas(){
+  var dados = await concluidosGuardados();
+  var ids = Object.keys(dados);
+  var total = ids.length;
+  var semAjuda = ids.filter(function(k){ return dados[k] === true; }).length;
+  var streak = await calcularStreak();
+
+  var linhas = [];
+  linhas.push('<div style="font-size:32px;font-family:var(--serif);color:var(--carvao);margin-bottom:2px">' + total + '</div>');
+  linhas.push('<div style="margin-bottom:16px">puzzle' + (total===1?'':'s') + ' resolvido' + (total===1?'':'s') + '</div>');
+  linhas.push('<div style="font-size:32px;font-family:var(--serif);color:var(--acento);margin-bottom:2px">' + semAjuda + '</div>');
+  linhas.push('<div style="margin-bottom:16px">sem ajuda nenhuma</div>');
+  linhas.push('<div style="font-size:32px;font-family:var(--serif);color:var(--carvao);margin-bottom:2px">' + streak + '</div>');
+  linhas.push('<div>dia' + (streak===1?'':'s') + ' seguido' + (streak===1?'':'s') + (streak>0?' agora':'') + '</div>');
+
+  el("#conteudo-estatisticas").innerHTML = linhas.join("");
+  el("#cortina-estatisticas").classList.add("aberta");
+  el("#estatisticas").classList.add("aberta");
+}
+function fecharEstatisticas(){
+  el("#cortina-estatisticas").classList.remove("aberta");
+  el("#estatisticas").classList.remove("aberta");
+}
+el("#b-abrir-estatisticas").onclick = mostrarEstatisticas;
+el("#b-fechar-estatisticas").onclick = fecharEstatisticas;
+el("#cortina-estatisticas").onclick = fecharEstatisticas;
 
 /* ============ boas-vindas (primeira visita) ============ */
 (async function(){
