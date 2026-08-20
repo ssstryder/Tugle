@@ -344,6 +344,7 @@
           <button id="b-check-letra">Letra</button>
           <button id="b-check-palavra">Palavra</button>
           <button id="b-check-puzzle">Puzzle</button>
+          <div id="check-contagem" style="padding:8px 10px 4px;font-size:11px;color:rgba(var(--tinta-rgb),.45);border-top:1px solid var(--linha);margin-top:2px"></div>
         </div>
       </div>
       <button class="abrir-lateral" id="b-abrir-arquivo">Arquivo</button>
@@ -731,6 +732,8 @@ window.tugleDebug = function(){
 var erroTemporario = {}; // "r,c" -> true, para o flash vermelho
 var ajudaUsada = false;
 var ajudaPorPalavra = {}; // entradaId -> true, se essa palavra levou ajuda
+var LIMITE_CHECKS = 3;
+var checksUsados = 0; // quantas ajudas (letra/palavra/puzzle) já foram gastas neste puzzle
 
 function chaveProgresso(id){ return "tugle:progresso:" + id; }
 async function guardarProgresso(){
@@ -738,7 +741,7 @@ async function guardarProgresso(){
   try {
     await loja.set(chaveProgresso(atual.id), JSON.stringify({
       resposta: resposta, resolvido: resolvido,
-      ajudaUsada: ajudaUsada, ajudaPorPalavra: ajudaPorPalavra
+      ajudaUsada: ajudaUsada, ajudaPorPalavra: ajudaPorPalavra, checksUsados: checksUsados
     }));
   } catch(e){}
 }
@@ -831,7 +834,7 @@ function tocar(entrada){
 async function carregar(p){
   pararSom();
   atual = p; celulas = {}; resposta = {}; sel = null; dir = "across";
-  resolvido = {}; erroTemporario = {}; ajudaUsada = false; ajudaPorPalavra = {};
+  resolvido = {}; erroTemporario = {}; ajudaUsada = false; ajudaPorPalavra = {}; checksUsados = 0;
   el("#caixa-vitoria").innerHTML = "";
   if (!p || !p.grelha){ el("#grelha").innerHTML = ""; return; }
   p.grelha.colocadas.forEach(function(w){
@@ -849,6 +852,7 @@ async function carregar(p){
     resolvido = guardado.resolvido || {};
     ajudaUsada = !!guardado.ajudaUsada;
     ajudaPorPalavra = guardado.ajudaPorPalavra || {};
+    checksUsados = guardado.checksUsados || 0;
   }
 
   desenhar(); listarPistas();
@@ -1093,7 +1097,7 @@ el("#b-tocar").addEventListener("keydown", function(ev){
 el("#b-limpar").onclick = function(){
   if (!atual) return;
   if (!confirm("Apagar tudo e recomeçar este puzzle do zero?")) return;
-  resposta = {}; resolvido = {}; erroTemporario = {}; ajudaUsada = false; ajudaPorPalavra = {};
+  resposta = {}; resolvido = {}; erroTemporario = {}; ajudaUsada = false; ajudaPorPalavra = {}; checksUsados = 0;
   atualizar();
 };
 
@@ -1102,7 +1106,15 @@ function mostrarAvisoCheck(msg){
   el("#pista-texto").innerHTML = "<span>"+msg+"</span>";
   irPara("jogar");
 }
+function checksEsgotados(){
+  if (checksUsados >= LIMITE_CHECKS){
+    mostrarAvisoCheck("Já usaste as "+LIMITE_CHECKS+" ajudas disponíveis para este puzzle.");
+    return true;
+  }
+  return false;
+}
 function revelarLetra(){
+  if (checksEsgotados()) return;
   var w = palavraAtual();
   if (!w){ mostrarAvisoCheck("Escolhe uma casa da grelha primeiro."); return; }
   if (palavraTravada(w)){ mostrarAvisoCheck("Essa palavra já está resolvida."); return; }
@@ -1114,21 +1126,25 @@ function revelarLetra(){
   resposta[k] = celulas[k].letra;
   ajudaUsada = true;
   ajudaPorPalavra[w.entradaId] = true;
+  checksUsados++;
   verificarSeCompleta(w);
   atualizar();
   irPara("jogar");
 }
 function revelarPalavra(){
+  if (checksEsgotados()) return;
   var w = palavraAtual();
   if (!w){ mostrarAvisoCheck("Escolhe uma casa da grelha primeiro."); return; }
   celulasDe(w).forEach(function(p){ resposta[p.r+","+p.c] = celulas[p.r+","+p.c].letra; });
   resolvido[w.entradaId] = true;
   ajudaUsada = true;
   ajudaPorPalavra[w.entradaId] = true;
+  checksUsados++;
   atualizar();
   irPara("jogar");
 }
 function revelarPuzzle(){
+  if (checksEsgotados()) return;
   if (!atual || !atual.grelha){ mostrarAvisoCheck("Ainda não há puzzle carregado."); return; }
   atual.grelha.colocadas.forEach(function(w){
     celulasDe(w).forEach(function(p){ resposta[p.r+","+p.c] = celulas[p.r+","+p.c].letra; });
@@ -1136,6 +1152,7 @@ function revelarPuzzle(){
     ajudaPorPalavra[w.entradaId] = true;
   });
   ajudaUsada = true;
+  checksUsados++;
   atualizar();
   irPara("jogar");
 }
@@ -1147,7 +1164,19 @@ el("#b-check-menu").onclick = function(ev){
   ev.stopPropagation();
   var aberto = el("#check-menu").classList.toggle("aberto");
   this.setAttribute("aria-expanded", aberto ? "true" : "false");
+  if (aberto) atualizarContagemChecks();
 };
+function atualizarContagemChecks(){
+  var restam = Math.max(0, LIMITE_CHECKS - checksUsados);
+  el("#check-contagem").textContent = restam > 0
+    ? restam + " de " + LIMITE_CHECKS + " ajudas restantes"
+    : "Sem mais ajudas para este puzzle";
+  ["#b-check-letra","#b-check-palavra","#b-check-puzzle"].forEach(function(sel){
+    el(sel).disabled = restam <= 0;
+    el(sel).style.opacity = restam <= 0 ? .35 : 1;
+    el(sel).style.cursor = restam <= 0 ? "default" : "pointer";
+  });
+}
 document.addEventListener("click", function(ev){
   if (!ev.target.closest(".check-dropdown")) fecharMenuCheck();
 });
