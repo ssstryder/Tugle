@@ -6,7 +6,7 @@ Palavras cruzadas diárias com música portuguesa. Ouves um excerto, escreves o 
 
 ---
 
-## Como é
+## Como funciona
 
 - **Início** — ecrã de entrada, só com o botão Começar.
 - **Jogar** — a grelha do dia, com um disco de vinil a tocar o excerto e uma pista de texto (artista, década, género) para cada entrada.
