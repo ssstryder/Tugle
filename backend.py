@@ -263,20 +263,32 @@ Sessao = async_sessionmaker(engine, expire_on_commit=False)
 cliente: httpx.AsyncClient | None = None
 
 
+# Alguns nomes são ambíguos na pesquisa da Deezer (há homónimos noutros
+# países) — para estes, usa-se sempre o id exato em vez de confiar na busca.
+IDS_ARTISTA_DEEZER: dict[str, int] = {
+    "Agir": 665993,  # o português (Bernardo Costa) — não o rapper alemão do mesmo nome
+}
+
+
 async def explorar_artista(artista: str) -> list[dict]:
     """Até 3 faixas com excerto disponível para um artista."""
-    try:
-        r = await cliente.get(f"{DEEZER}/search/artist", params={"q": artista, "limit": 1})
-        achados = (r.json() or {}).get("data") or []
-    except Exception as erro:
-        print(f"[tugle]   {artista}: falhou a pesquisa de artista ({erro})")
-        return []
-    if not achados:
-        print(f"[tugle]   {artista}: a Deezer não encontrou este artista")
-        return []
+    id_conhecido = IDS_ARTISTA_DEEZER.get(artista)
+    if id_conhecido:
+        artista_id = id_conhecido
+    else:
+        try:
+            r = await cliente.get(f"{DEEZER}/search/artist", params={"q": artista, "limit": 1})
+            achados = (r.json() or {}).get("data") or []
+        except Exception as erro:
+            print(f"[tugle]   {artista}: falhou a pesquisa de artista ({erro})")
+            return []
+        if not achados:
+            print(f"[tugle]   {artista}: a Deezer não encontrou este artista")
+            return []
+        artista_id = achados[0]["id"]
 
     try:
-        r = await cliente.get(f"{DEEZER}/artist/{achados[0]['id']}/top", params={"limit": 20})
+        r = await cliente.get(f"{DEEZER}/artist/{artista_id}/top", params={"limit": 20})
         topo = (r.json() or {}).get("data") or []
     except Exception as erro:
         print(f"[tugle]   {artista}: falhou a lista de faixas ({erro})")
@@ -618,14 +630,19 @@ async def catalogo_resumo() -> dict:
 
 
 @app.post("/catalogo/limpar")
-async def catalogo_limpar() -> dict:
-    """Apaga do catálogo as faixas de artistas que já não estão na lista
-    ARTISTAS — útil depois de removeres alguém, para não ficarem sobras
-    guardadas para sempre (mesmo que já não saiam em nenhum puzzle novo)."""
-    artistas_atuais = {normalizar(a) for a in ARTISTAS}
+async def catalogo_limpar(artista: str | None = None) -> dict:
+    """Sem parâmetro: apaga faixas de artistas que já não estão em ARTISTAS.
+    Com ?artista=Nome: apaga TODAS as faixas guardadas desse nome, mesmo que
+    ainda esteja na lista — útil quando a Deezer confundiu com um homónimo
+    (ex.: /catalogo/limpar?artista=Agir depois de corrigir o id em IDS_ARTISTA_DEEZER)."""
     async with Sessao() as sessao:
         todas = list((await sessao.execute(select(Faixa))).scalars().all())
-        removidas = [f for f in todas if normalizar(f.artista) not in artistas_atuais]
+        if artista:
+            alvo = normalizar(artista)
+            removidas = [f for f in todas if normalizar(f.artista) == alvo]
+        else:
+            artistas_atuais = {normalizar(a) for a in ARTISTAS}
+            removidas = [f for f in todas if normalizar(f.artista) not in artistas_atuais]
         for f in removidas:
             await sessao.delete(f)
         await sessao.commit()
