@@ -582,6 +582,7 @@ async def obter_bytes_faixa(entrada_id: str, url: str) -> bytes:
 PASTA = Path(__file__).parent
 FICHEIRO_FRONTEND = PASTA / "tugle.html"
 FICHEIRO_INICIO = PASTA / "inicio.html"
+FICHEIRO_FAVICON = PASTA / "favicon.svg"
 
 
 @app.get("/", include_in_schema=False)
@@ -598,6 +599,13 @@ async def pagina_jogo():
     if FICHEIRO_FRONTEND.exists():
         return FileResponse(FICHEIRO_FRONTEND, media_type="text/html")
     return {"aviso": "coloca o tugle.html na mesma pasta do backend.py"}
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+async def favicon():
+    if FICHEIRO_FAVICON.exists():
+        return FileResponse(FICHEIRO_FAVICON, media_type="image/svg+xml")
+    raise HTTPException(404, "favicon.svg não encontrado")
 
 
 @app.get("/estado")

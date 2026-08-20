@@ -1,0 +1,22 @@
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="120" cy="120" r="116" fill="#F4F1EA"/>
+
+  <circle cx="120" cy="120" r="100" fill="#17140F"/>
+  <circle cx="120" cy="120" r="86" fill="none" stroke="#F4F1EA" stroke-opacity="0.06" stroke-width="1"/>
+  <circle cx="120" cy="120" r="72" fill="none" stroke="#F4F1EA" stroke-opacity="0.06" stroke-width="1"/>
+  <circle cx="120" cy="120" r="58" fill="none" stroke="#F4F1EA" stroke-opacity="0.06" stroke-width="1"/>
+
+  <g transform="translate(88,88)">
+    <rect x="0"  y="0"  width="21" height="21" fill="#F4F1EA"/>
+    <rect x="0"  y="21" width="21" height="21" fill="none"/>
+    <rect x="21" y="0"  width="21" height="21" fill="#F4F1EA"/>
+    <rect x="21" y="21" width="21" height="21" fill="#B8461F"/>
+    <rect x="42" y="0"  width="21" height="21" fill="none"/>
+    <rect x="42" y="21" width="21" height="21" fill="#F4F1EA"/>
+    <rect x="0"  y="42" width="21" height="21" fill="#F4F1EA"/>
+    <rect x="21" y="42" width="21" height="21" fill="none"/>
+    <rect x="42" y="42" width="21" height="21" fill="#F4F1EA"/>
+  </g>
+
+  <circle cx="120" cy="120" r="6" fill="#17140F"/>
+</svg>
