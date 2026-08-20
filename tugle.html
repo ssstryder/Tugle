@@ -1396,6 +1396,28 @@ el("#b-partilhar").onclick = function(){
   });
 };
 
+/* ============ puzzle de hoje (via backend) ============ */
+async function buscarPuzzleHoje(silencioso){
+  if (!silencioso) el("#pista-texto").innerHTML = "<span>A ir buscar o puzzle de hoje…</span>";
+  try {
+    var base = baseURL();
+    var r = await fetch(base + "/puzzle/hoje");
+    if (!r.ok) throw new Error("estado "+r.status);
+    var p = await r.json();
+    p.entradas.forEach(function(e){ if (e.audio && e.audio.indexOf("http")!==0) e.audio = base + e.audio; });
+    var i = puzzles.findIndex(function(x){ return x.id===p.id; });
+    if (i>-1) puzzles[i] = p; else puzzles.unshift(p);
+    await guardar(); encherSelects();
+    el("#sel-puzzle").value = p.id;
+    await carregar(p);
+    return true;
+  } catch(e){
+    if (!silencioso) el("#pista-texto").innerHTML = "<span>Não consegui ir buscar o puzzle de hoje. Se estás a testar localmente, configura o servidor na aba Editor.</span>";
+    return false;
+  }
+}
+el("#b-hoje").onclick = function(){ buscarPuzzleHoje(false); };
+
 /* ============ persistência ============ */
 async function guardar(){ await loja.set(CHAVE, JSON.stringify(puzzles)); }
 function encherSelects(){
@@ -1462,6 +1484,64 @@ document.querySelectorAll(".aba[data-vista]").forEach(function(b){
 });
 
 /* ============ painel lateral do arquivo ============ */
+var CHAVE_CONCLUIDOS = "tugle:concluidos";
+async function concluidosGuardados(){
+  var s = await loja.get(CHAVE_CONCLUIDOS);
+  try { return s ? JSON.parse(s) : []; } catch(e){ return []; }
+}
+async function marcarConcluido(puzzleId){
+  if (!puzzleId) return;
+  var lista = await concluidosGuardados();
+  if (lista.indexOf(puzzleId) === -1){
+    lista.push(puzzleId);
+    await loja.set(CHAVE_CONCLUIDOS, JSON.stringify(lista));
+  }
+}
+async function carregarArquivo(){
+  var caixa = el("#estado-arquivo"), lista = el("#lista-arquivo");
+  lista.innerHTML = "";
+  caixa.innerHTML = '<div class="aviso neutro">A carregar…</div>';
+  try {
+    var base = baseURL();
+    var r = await fetch(base + "/puzzles");
+    if (!r.ok) throw new Error("estado "+r.status);
+    var itens = await r.json();
+    var concluidos = await concluidosGuardados();
+    caixa.innerHTML = "";
+    if (!itens.length){ caixa.innerHTML = '<div class="aviso neutro">Ainda não há puzzles guardados.</div>'; return; }
+    itens.forEach(function(item){
+      var li = criar("li");
+      li.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--linha);cursor:pointer;font-size:14px";
+      li.appendChild(criar("span",null,item.nome));
+      var marca = criar("span",null, concluidos.indexOf(item.data)>-1 ? "concluído" : "");
+      marca.style.cssText = "font:600 10px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--acento)";
+      li.appendChild(marca);
+      li.onclick = function(){ abrirDoArquivo(item.data); };
+      lista.appendChild(li);
+    });
+  } catch(e){
+    caixa.innerHTML = '<div class="aviso mau">Não consegui ir buscar a lista. Confirma o servidor.</div>';
+  }
+}
+async function abrirDoArquivo(data){
+  var base = baseURL();
+  el("#estado-arquivo").innerHTML = '<div class="aviso neutro">A abrir…</div>';
+  try {
+    var r = await fetch(base + "/puzzle/" + data);
+    if (!r.ok) throw new Error("estado "+r.status);
+    var p = await r.json();
+    p.entradas.forEach(function(e){ if (e.audio && e.audio.indexOf("http")!==0) e.audio = base + e.audio; });
+    var i = puzzles.findIndex(function(x){ return x.id===p.id; });
+    if (i>-1) puzzles[i] = p; else puzzles.unshift(p);
+    await guardar(); encherSelects();
+    el("#sel-puzzle").value = p.id;
+    carregar(p);
+    document.querySelector('[data-vista="jogar"]').click();
+    fecharLateral();
+  } catch(e){
+    el("#estado-arquivo").innerHTML = '<div class="aviso mau">Não consegui abrir esse dia.</div>';
+  }
+}
 function abrirLateral(){
   el("#cortina").classList.add("aberta");
   el("#lateral").classList.add("aberta");
