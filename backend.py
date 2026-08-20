@@ -69,16 +69,53 @@ BASE_DE_DADOS, _connect_args = preparar_url_bd(
 DIAS_ATE_REPETIR = 45      # uma faixa só volta a sair passado este tempo
 TAMANHO_MINIMO_CATALOGO = 1000
 
-# Dias temáticos: 0=segunda ... 4=sexta ... 6=domingo (dt.date.weekday()).
-# Se não houver faixas suficientes desse tema nesse dia, cai-se sozinho no
-# catálogo normal — nunca bloqueia a geração do puzzle.
+# Datas festivas: se não houver faixas suficientes desse tema nesse dia,
+# cai-se sozinho no catálogo normal — nunca bloqueia a geração do puzzle.
 ARTISTAS_FADO = {
     "Amália Rodrigues", "Mariza", "Carminho", "Ana Moura", "Camané",
     "Gisela João", "Cuca Roseta", "Raquel Tavares", "Sara Correia",
 }
-DIAS_TEMATICOS: dict[int, tuple[str, set[str]]] = {
-    4: ("Fado", ARTISTAS_FADO),  # sexta-feira
+ARTISTAS_PIMBA = {
+    "Quim Barreiros", "Tony Carreira", "Emanuel", "Ágata", "Ana Malhoa", "Marco Paulo",
 }
+
+# datas fixas: (mês, dia) -> (nome do tema, artistas)
+DATAS_FESTIVAS_FIXAS: dict[tuple[int, int], tuple[str, set[str]]] = {
+    (12, 24): ("Véspera de Natal", ARTISTAS_FADO),
+    (12, 25): ("Natal", ARTISTAS_FADO),
+    (1, 1): ("Ano Novo", ARTISTAS_PIMBA),
+}
+
+
+def calcular_pascoa(ano: int) -> dt.date:
+    """Domingo de Páscoa desse ano (algoritmo de Meeus/Jones/Butcher)."""
+    a = ano % 19
+    b = ano // 100
+    c = ano % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mes = (h + l - 7 * m + 114) // 31
+    dia = ((h + l - 7 * m + 114) % 31) + 1
+    return dt.date(ano, mes, dia)
+
+
+def tema_do_dia(data: dt.date) -> tuple[str, set[str]] | None:
+    fixa = DATAS_FESTIVAS_FIXAS.get((data.month, data.day))
+    if fixa:
+        return fixa
+    if data == calcular_pascoa(data.year):
+        return ("Páscoa", ARTISTAS_PIMBA)
+    carnaval = calcular_pascoa(data.year) - dt.timedelta(days=47)
+    if data == carnaval:
+        return ("Carnaval", ARTISTAS_PIMBA)
+    return None
 
 CHAVE_ADMIN = os.environ.get("ADMIN_KEY", "")
 
@@ -466,7 +503,7 @@ async def montar_puzzle(data: dt.date) -> dict:
     artistas_atuais = {normalizar(a) for a in ARTISTAS}
     candidatas = [f for f in candidatas if normalizar(f.artista) in artistas_atuais]
 
-    tema_hoje = DIAS_TEMATICOS.get(data.weekday())
+    tema_hoje = tema_do_dia(data)
     nome_tema = None
     if tema_hoje:
         nome_tema, artistas_tema = tema_hoje
