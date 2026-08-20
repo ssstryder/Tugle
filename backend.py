@@ -58,6 +58,7 @@ def preparar_url_bd(url: str) -> tuple[str, dict]:
     query = dict(parse_qsl(partes.query))
     query.pop("sslmode", None)
     query.pop("ssl", None)
+    query.pop("channel_binding", None)
     url_limpo = urlunsplit((partes.scheme, partes.netloc, partes.path, urlencode(query), partes.fragment))
     return url_limpo, {"ssl": "require"}
 
