@@ -42,7 +42,7 @@ LISBOA = ZoneInfo("Europe/Lisbon")
 DEEZER = "https://api.deezer.com"
 BASE_DE_DADOS = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///tugle.db")
 DIAS_ATE_REPETIR = 45      # uma faixa só volta a sair passado este tempo
-TAMANHO_MINIMO_CATALOGO = 600
+TAMANHO_MINIMO_CATALOGO = 1000
 ENTRADAS_POR_PUZZLE = 16
 # A Deezer recorta os 30s de antevisão a começar algures na música, muitas
 # vezes ainda em desvanecimento/intro. Saltar uns segundos costuma aproximar
@@ -276,7 +276,7 @@ async def explorar_artista(artista: str) -> list[dict]:
         return []
 
     try:
-        r = await cliente.get(f"{DEEZER}/artist/{achados[0]['id']}/top", params={"limit": 15})
+        r = await cliente.get(f"{DEEZER}/artist/{achados[0]['id']}/top", params={"limit": 20})
         topo = (r.json() or {}).get("data") or []
     except Exception as erro:
         print(f"[tugle]   {artista}: falhou a lista de faixas ({erro})")
@@ -295,7 +295,7 @@ async def explorar_artista(artista: str) -> list[dict]:
             "capa": faixa.get("album", {}).get("cover_medium", ""),
             "audio": faixa["preview"],
         })
-        if len(faixas) >= 8:
+        if len(faixas) >= 12:
             break
     if not faixas:
         print(f"[tugle]   {artista}: encontrado, mas nenhuma faixa tem excerto (preview vazio)")
