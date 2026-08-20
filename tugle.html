@@ -1606,6 +1606,8 @@ el("#cortina-boas-vindas").onclick = function(){ el("#b-fechar-boas-vindas").cli
 
   var guardados = await loja.get(CHAVE);
   if (guardados){ try { puzzles = JSON.parse(guardados); } catch(e){ puzzles = []; } }
+  var semExemplo = puzzles.filter(function(p){ return !(p.nome || "").startsWith("Estreia"); });
+  if (semExemplo.length !== puzzles.length){ puzzles = semExemplo; await guardar(); }
 
   if (location.hash.indexOf("#p=")===0){
     try { var d = JSON.parse(deBase64(location.hash.slice(3))); d.id = d.id||id(); puzzles.unshift(d); } catch(e){}
