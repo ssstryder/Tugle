@@ -378,16 +378,26 @@ async def genero_e_decada(album_id) -> tuple[str, int | None]:
         return "", None
 
 
-async def garantir_catalogo(minimo: int) -> None:
+async def garantir_catalogo(minimo: int, limite_por_chamada: int = 25) -> None:
+    """Faz o catálogo crescer até ao mínimo, mas nunca explora mais que
+    `limite_por_chamada` artistas de uma vez — sem este limite, quando o
+    catálogo precisa de crescer muito (ex.: logo a seguir à meia-noite),
+    esta função pode demorar minutos e o pedido que a disparou (o
+    /puzzle/hoje de alguém) acaba por desistir a meio, dando um erro
+    mesmo que o trabalho continue a acontecer por trás. Com o limite,
+    cada chamada é rápida — o catálogo cresce um pouco de cada vez que
+    é preciso, em vez de tudo de uma só vez."""
     async with Sessao() as sessao:
         total = len((await sessao.execute(select(Faixa.id))).all())
         if total >= minimo:
             return
 
-        print(f"[tugle] catálogo tem {total} faixas, a construir até {minimo}…")
+        print(f"[tugle] catálogo tem {total} faixas, a construir até {minimo} (até {limite_por_chamada} artistas nesta chamada)…")
+        explorados = 0
         for artista in artistas_do_dia(dt.date.today(), len(ARTISTAS)):
-            if total >= minimo:
+            if total >= minimo or explorados >= limite_por_chamada:
                 break
+            explorados += 1
             novas = await explorar_artista(artista)
             adicionadas = 0
             for f in novas:
@@ -410,13 +420,29 @@ async def garantir_catalogo(minimo: int) -> None:
 
 # ---------------------------------------------------------------- montagem do puzzle diário
 
-def pista_para(faixa: "Faixa") -> str:
-    partes = [f"Música de {faixa.artista}."]
-    if faixa.decada:
-        partes.append(f"Da década de {faixa.decada}.")
-    if faixa.genero:
-        partes.append(f"Género: {faixa.genero}.")
-    return " ".join(partes)
+def pista_para(faixa: "Faixa", semente: str) -> str:
+    """Várias formas de dizer a mesma coisa, escolhida de forma estável
+    (a mesma música dá sempre a mesma pista nesse dia, mas dias diferentes
+    ou músicas diferentes podem calhar noutro modelo — nunca é sempre a
+    mesma frase robótica)."""
+    artista = faixa.artista
+    decada = faixa.decada
+    genero = faixa.genero or None
+
+    modelos = [f"Uma música de {artista}."]
+    if decada:
+        modelos.append(f"{artista}, lá dos anos {decada}.")
+        modelos.append(f"Isto é de {artista}, ainda nos anos {decada}.")
+        modelos.append(f"Uma faixa de {artista}, algures nos anos {decada}.")
+    if genero:
+        modelos.append(f"{genero}, à moda de {artista}.")
+        modelos.append(f"Um tema de {genero}, por {artista}.")
+    if genero and decada:
+        modelos.append(f"{genero} dos anos {decada}, assinado por {artista}.")
+        modelos.append(f"Se é {genero} e é dos anos {decada}, aposta em {artista}.")
+
+    aleatorio = random.Random(semente + faixa.id)
+    return aleatorio.choice(modelos)
 
 
 async def montar_puzzle(data: dt.date) -> dict:
@@ -465,7 +491,7 @@ async def montar_puzzle(data: dt.date) -> dict:
     entradas = [{
         "id": f.id, "resposta": f.titulo, "titulo": f.titulo, "artista": f.artista,
         "capa": f.capa, "genero": f.genero, "decada": f.decada,
-        "pista": pista_para(f), "inicio": INICIO_EXCERTO_SEGUNDOS,
+        "pista": pista_para(f, data.isoformat()), "inicio": INICIO_EXCERTO_SEGUNDOS,
     } for f in candidatas]
 
     grelha = gerar_grelha(entradas)
