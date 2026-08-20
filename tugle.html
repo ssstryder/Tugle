@@ -645,6 +645,9 @@ function gerarGrelha(entradas){
   var mapa = {}, colocadas = [], falhadas = [];
   function chave(r,c){ return r+","+c; }
   function testar(p,r,c,dir){
+    for (var j=0;j<colocadas.length;j++){
+      if (colocadas[j].r===r && colocadas[j].c===c && colocadas[j].dir===dir) return null;
+    }
     var dr = dir==="down"?1:0, dc = dir==="across"?1:0;
     if (mapa[chave(r-dr,c-dc)]) return null;
     if (mapa[chave(r+dr*p.length, c+dc*p.length)]) return null;

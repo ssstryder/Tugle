@@ -169,6 +169,8 @@ def gerar_grelha(entradas: list[dict]) -> dict:
     falhadas: list[str] = []
 
     def testar(p, r, c, direcao):
+        if any(b["r"] == r and b["c"] == c and b["dir"] == direcao for b in colocadas):
+            return None  # já há uma palavra a começar exatamente aqui, na mesma direção
         dr, dc = (1, 0) if direcao == "down" else (0, 1)
         if mapa.get((r - dr, c - dc)):
             return None
@@ -512,6 +514,7 @@ def puzzle_desatualizado(puzzle: dict) -> bool:
     ids_validos = {e.get("id") for e in puzzle.get("entradas", [])}
     grelha = puzzle.get("grelha", {})
     linhas, colunas = grelha.get("linhas", 0), grelha.get("colunas", 0)
+    posicoes_vistas = set()
     for c in grelha.get("colocadas", []):
         if c.get("entradaId") not in ids_validos:
             return True
@@ -520,6 +523,10 @@ def puzzle_desatualizado(puzzle: dict) -> bool:
             return True
         if c.get("dir") == "across" and c.get("c", 0) + comprimento > colunas:
             return True
+        chave_posicao = (c.get("r"), c.get("c"), c.get("dir"))
+        if chave_posicao in posicoes_vistas:
+            return True  # duas palavras diferentes a começar na mesma casa e direção
+        posicoes_vistas.add(chave_posicao)
     artistas_atuais = {normalizar(a) for a in ARTISTAS}
     for e in puzzle.get("entradas", []):
         if not e.get("pista"):
