@@ -3,7 +3,7 @@
    CONFIGURAÇÃO — troca pelo teu Client ID da Twitch
    (vê dev.twitch.tv/console/apps para criares o teu)
    ============================================================ */
-var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
+var CLIENT_ID = "COLOCA_AQUI_O_TEU_CLIENT_ID";
 </script>
 
 <meta charset="utf-8">
@@ -338,7 +338,7 @@ var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
 
   <div class="zona" id="zona-jogo" style="display:none">
     <div class="jogo">
-      <div class="progresso" id="progresso">A carregar o puzzle de hoje…<span class="temporizador-visual" id="temporizador-visual"></span></div>
+      <div class="progresso" id="linha-progresso"><span id="progresso">A carregar o puzzle de hoje…</span><span class="temporizador-visual" id="temporizador-visual"></span></div>
       <div class="disco" id="disco">
         <div class="disco-centro"><span class="disco-icone" id="disco-icone">▶</span></div>
       </div>
@@ -556,7 +556,7 @@ function proximaPalavra(){
     return;
   }
   var e = entradaAtual();
-  el("#progresso").innerHTML = "Palavra " + (indiceAtual+1) + " de " + entradas.length + '<span class="temporizador-visual" id="temporizador-visual"></span>';
+  el("#progresso").textContent = "Palavra " + (indiceAtual+1) + " de " + entradas.length;
   el("#pista").textContent = e.pista;
   el("#meta-pista").textContent = normalizar(e.resposta).length + " letras";
   arrancarTemporizador();
