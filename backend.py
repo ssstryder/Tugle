@@ -454,6 +454,23 @@ async def explorar_artista(artista: str) -> list[dict]:
     return faixas
 
 
+TRADUCAO_GENEROS = {
+    "afrikanische musik": "Música africana",
+    "brasilianische musik": "Música brasileira",
+    "musique africaine": "Música africana",
+    "musique brésilienne": "Música brasileira",
+    "african music": "Música africana",
+    "brazilian music": "Música brasileira",
+    "singer & songwriter": "Singer-songwriter",
+}
+
+
+def genero_traduzido(genero: str | None) -> str | None:
+    if not genero:
+        return genero
+    return TRADUCAO_GENEROS.get(genero.strip().lower(), genero)
+
+
 async def genero_e_decada(album_id) -> tuple[str, int | None]:
     if not album_id:
         return "", None
@@ -463,7 +480,7 @@ async def genero_e_decada(album_id) -> tuple[str, int | None]:
         genero = ((d.get("genres") or {}).get("data") or [{}])[0].get("name", "")
         lancamento = d.get("release_date", "") or ""
         decada = int(lancamento[:3] + "0") if len(lancamento) >= 4 and lancamento[:4].isdigit() else None
-        return genero, decada
+        return genero_traduzido(genero) or "", decada
     except Exception:
         return "", None
 
@@ -517,7 +534,7 @@ def candidatos_resposta(faixa: "Faixa") -> list[tuple[str, str]]:
     titulo = (faixa.titulo or "").strip()
     artista = (faixa.artista or "").strip()
     decada = faixa.decada
-    genero = faixa.genero or None
+    genero = genero_traduzido(faixa.genero) or None
     candidatos: list[tuple[str, str]] = []
 
     def cabe(palavra: str) -> bool:
@@ -621,7 +638,7 @@ async def montar_puzzle(data: dt.date) -> dict:
         resposta, pista = escolha
         entradas.append({
             "id": f.id, "resposta": resposta, "titulo": f.titulo, "artista": f.artista,
-            "capa": f.capa, "genero": f.genero, "decada": f.decada,
+            "capa": f.capa, "genero": genero_traduzido(f.genero), "decada": f.decada,
             "pista": pista, "inicio": INICIO_EXCERTO_SEGUNDOS,
         })
 
@@ -686,7 +703,7 @@ async def montar_puzzle_personalizado(
         resposta, pista = escolha
         entradas.append({
             "id": f.id, "resposta": resposta, "titulo": f.titulo, "artista": f.artista,
-            "capa": f.capa, "genero": f.genero, "decada": f.decada,
+            "capa": f.capa, "genero": genero_traduzido(f.genero), "decada": f.decada,
             "pista": pista, "inicio": INICIO_EXCERTO_SEGUNDOS,
         })
 
@@ -795,7 +812,10 @@ async def tarefa_meia_noite() -> None:
 @asynccontextmanager
 async def tempo_de_vida(app: FastAPI):
     global cliente
-    cliente = httpx.AsyncClient(timeout=12, headers={"User-Agent": "Tugle/1.0"})
+    cliente = httpx.AsyncClient(
+        timeout=12,
+        headers={"User-Agent": "Tugle/1.0", "Accept-Language": "pt-PT,pt;q=0.9"},
+    )
     async with engine.begin() as conexao:
         await conexao.run_sync(Base.metadata.create_all)
 
