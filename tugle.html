@@ -82,12 +82,12 @@
   .check-menu button:hover{background:rgba(var(--tinta-rgb),.06)}
   .check-menu button:last-child{color:var(--acento)}
 
-  .modos-menu{width:320px;max-width:88vw;padding:16px;left:auto;right:0}
+  .modos-menu{width:300px;max-width:88vw;padding:14px 14px 12px;left:auto;right:0}
   .modos-menu .ajuda-modos{font-size:12px;line-height:1.5;color:rgba(var(--tinta-rgb),.55);
     margin:0 0 14px}
   .modos-menu button:last-child{color:inherit}
   .modos-menu .decada-item:last-child{color:#fff}
-  .modos-menu .decada-item.tema-todas:last-child{color:var(--osso)}
+  .modos-menu .decada-item.tema-todas:last-child{color:var(--carvao)}
   .modos-menu .seg-item:last-child{color:var(--carvao)}
   .modos-menu .seg-item.ativo:last-child{color:var(--osso)}
 
@@ -99,7 +99,7 @@
     transition:transform .22s ease;z-index:41;overflow-y:auto;padding:26px 24px}
   .lateral.aberta{transform:translateX(0)}
   .rotulo-modo{font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;
-    color:rgba(var(--tinta-rgb),.5);display:block;margin-top:22px}
+    color:rgba(var(--tinta-rgb),.5);display:block;margin-top:16px;margin-bottom:2px}
   .rotulo-modo:first-of-type{margin-top:0}
 
   .segmentado-modo{display:flex;border:1px solid var(--carvao);border-radius:20px;
@@ -110,15 +110,17 @@
   .segmentado-modo .seg-item+.seg-item{border-left:1px solid var(--carvao)}
   .segmentado-modo .seg-item.ativo{background:var(--carvao);color:var(--osso)}
 
-  .decadas-modo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .decadas-modo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
   .decadas-modo .decada-item{position:relative;overflow:hidden;border-radius:8px;
-    border:2px solid transparent;padding:20px 10px;text-align:center;cursor:pointer;
-    color:#fff;font-family:var(--serif);font-size:23px;line-height:1;
+    border:2px solid transparent;padding:16px 10px;text-align:center;cursor:pointer;
+    color:#fff;font-family:var(--serif);font-size:20px;line-height:1;
     transition:transform .12s,border-color .12s;appearance:none}
   .decadas-modo .decada-item:hover{transform:scale(1.03)}
   .decadas-modo .decada-item.ativo{border-color:var(--acento)}
-  .decadas-modo .decada-item.tema-todas{background:var(--carvao);color:var(--osso);
-    grid-column:1 / -1}
+  .decadas-modo .decada-item.tema-todas{background:rgba(var(--tinta-rgb),.08);color:var(--carvao);
+    grid-column:1 / -1;font:600 12px/1 var(--sans);letter-spacing:.06em;
+    text-transform:uppercase;padding:11px 10px}
+  .decadas-modo .decada-item.tema-todas.ativo{border-color:var(--acento)}
   .decadas-modo .decada-item.tema-1990{
     background:
       radial-gradient(circle at 24% 22%, rgba(255,255,255,.55) 1px, transparent 1.6px) 0 0/16px 16px,
@@ -402,8 +404,7 @@
         <button class="aba" id="b-tab-modos" aria-haspopup="true" aria-expanded="false">Modos</button>
         <div class="check-menu modos-menu" id="menu-modos">
           <p class="ajuda-modos">
-            Um puzzle à parte, gerado na hora — podes jogar quantas vezes
-            quiseres, com os filtros que escolheres.
+            Escolhe a origem, depois toca numa década para jogares logo.
           </p>
           <span class="rotulo-modo">Origem</span>
           <div class="segmentado-modo" id="botoes-origem" data-tipo="origem">
@@ -415,8 +416,7 @@
           <div class="decadas-modo" id="botoes-decada" data-tipo="decada">
             <button class="decada-item ativo tema-todas" data-valor=""><span>Todas</span></button>
           </div>
-          <button class="btn primario" id="b-jogar-modo" style="width:100%;margin-top:18px">Jogar este modo</button>
-          <div id="estado-modos" style="margin-top:10px"></div>
+          <div id="estado-modos" style="margin-top:12px"></div>
         </div>
       </div>
     </nav>
@@ -1363,10 +1363,9 @@ document.addEventListener("click", function(ev){
 });
 document.addEventListener("keydown", function(ev){ if (ev.key === "Escape") fecharMenuModos(); });
 
-el("#b-jogar-modo").onclick = async function(){
+async function jogarModoEscolhido(){
   var caixa = el("#estado-modos");
   caixa.innerHTML = '<div class="aviso neutro">A montar o puzzle…</div>';
-  el("#b-jogar-modo").disabled = true;
   try {
     var base = baseURL();
     var url;
@@ -1392,10 +1391,11 @@ el("#b-jogar-modo").onclick = async function(){
     irPara("jogar");
   } catch(e){
     caixa.innerHTML = '<div class="aviso mau">' + (e.message || "Não consegui montar este puzzle.") + '</div>';
-  } finally {
-    el("#b-jogar-modo").disabled = false;
   }
-};
+}
+el("#botoes-decada").addEventListener("click", function(ev){
+  if (ev.target.closest("[data-valor]")) jogarModoEscolhido();
+});
 
 /* ============ painel lateral do arquivo ============ */
 var CHAVE_CONCLUIDOS = "tugle:concluidos";
