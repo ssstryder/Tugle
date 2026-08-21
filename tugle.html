@@ -1356,10 +1356,18 @@ el("#b-jogar-modo").onclick = async function(){
   caixa.innerHTML = '<div class="aviso neutro">A montar o puzzle…</div>';
   el("#b-jogar-modo").disabled = true;
   try {
-    var params = new URLSearchParams({ origem: escolhaModo.origem });
-    if (escolhaModo.decada) params.set("decada", escolhaModo.decada);
     var base = baseURL();
-    var r = await fetch(base + "/puzzle/personalizado?" + params.toString());
+    var url;
+    if (escolhaModo.decada){
+      // década escolhida: puzzle diário partilhado, um só por dia para toda a gente
+      var paramsDecada = new URLSearchParams({ origem: escolhaModo.origem });
+      url = base + "/puzzle/hoje/decada/" + escolhaModo.decada + "?" + paramsDecada.toString();
+    } else {
+      // sem década: modo livre, gerado na hora, só para ti
+      var params = new URLSearchParams({ origem: escolhaModo.origem });
+      url = base + "/puzzle/personalizado?" + params.toString();
+    }
+    var r = await fetch(url);
     if (!r.ok){
       var erro = await r.json().catch(function(){ return {}; });
       throw new Error(erro.detail || ("estado " + r.status));
