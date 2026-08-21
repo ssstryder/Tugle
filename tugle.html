@@ -355,7 +355,8 @@
   <section id="vista-jogar">
     <div class="barra">
       <button class="btn primario" id="b-hoje">Puzzle de hoje</button>
-      <select id="sel-puzzle" class="cresce"></select>
+      <select id="sel-puzzle" class="cresce esconde"></select>
+      <button class="btn cresce" id="b-abrir-arquivo-barra">Arquivo</button>
       <button class="btn suave" id="b-limpar">Limpar</button>
       <button class="btn suave" id="b-partilhar">Copiar link</button>
     </div>
@@ -1449,6 +1450,11 @@ el("#b-partilhar").onclick = function(){
 };
 
 /* ============ puzzle de hoje (via backend) ============ */
+function desduplicarPuzzles(){
+  puzzles = puzzles.filter(function(x, idx){
+    return puzzles.findIndex(function(y){ return y.id===x.id; }) === idx;
+  });
+}
 async function buscarPuzzleHoje(silencioso){
   if (!silencioso) el("#pista-texto").innerHTML = "<span>A ir buscar o puzzle de hoje…</span>";
   try {
@@ -1459,6 +1465,7 @@ async function buscarPuzzleHoje(silencioso){
     p.entradas.forEach(function(e){ if (e.audio && e.audio.indexOf("http")!==0) e.audio = base + e.audio; });
     var i = puzzles.findIndex(function(x){ return x.id===p.id; });
     if (i>-1) puzzles[i] = p; else puzzles.unshift(p);
+    desduplicarPuzzles();
     await guardar(); encherSelects();
     el("#sel-puzzle").value = p.id;
     await carregar(p);
@@ -1594,6 +1601,7 @@ async function abrirDoArquivo(data){
     p.entradas.forEach(function(e){ if (e.audio && e.audio.indexOf("http")!==0) e.audio = base + e.audio; });
     var i = puzzles.findIndex(function(x){ return x.id===p.id; });
     if (i>-1) puzzles[i] = p; else puzzles.unshift(p);
+    desduplicarPuzzles();
     await guardar(); encherSelects();
     el("#sel-puzzle").value = p.id;
     carregar(p);
@@ -1613,6 +1621,7 @@ function fecharLateral(){
   el("#lateral").classList.remove("aberta");
 }
 el("#b-abrir-arquivo").onclick = abrirLateral;
+el("#b-abrir-arquivo-barra").onclick = abrirLateral;
 el("#b-fechar-arquivo").onclick = fecharLateral;
 el("#cortina").onclick = fecharLateral;
 document.addEventListener("keydown", function(ev){
@@ -1705,7 +1714,10 @@ el("#cortina-boas-vindas").onclick = function(){ el("#b-fechar-boas-vindas").cli
   var guardados = await loja.get(CHAVE);
   if (guardados){ try { puzzles = JSON.parse(guardados); } catch(e){ puzzles = []; } }
   var semExemplo = puzzles.filter(function(p){ return !(p.nome || "").startsWith("Estreia"); });
-  if (semExemplo.length !== puzzles.length){ puzzles = semExemplo; await guardar(); }
+  var totalAntes = puzzles.length;
+  puzzles = semExemplo;
+  desduplicarPuzzles();
+  if (puzzles.length !== totalAntes){ await guardar(); }
 
   if (location.hash.indexOf("#p=")===0){
     try { var d = JSON.parse(deBase64(location.hash.slice(3))); d.id = d.id||id(); puzzles.unshift(d); } catch(e){}
