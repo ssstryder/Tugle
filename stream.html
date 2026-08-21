@@ -397,7 +397,14 @@ async function novoJogo(){
     var quantidade = parseInt(el("#stream-quantidade").value, 10) || 20;
     var params = new URLSearchParams({ origem: modoStream.origem, quantidade: quantidade });
     if (modoStream.decada && modoStream.decada !== "todas") params.set("decada", modoStream.decada);
-    var r = await fetch("/puzzle/stream?" + params.toString());
+    var controlador = new AbortController();
+    var tempoLimite = setTimeout(function(){ controlador.abort(); }, 15000);
+    var r;
+    try {
+      r = await fetch("/puzzle/stream?" + params.toString(), { signal: controlador.signal });
+    } finally {
+      clearTimeout(tempoLimite);
+    }
     if (!r.ok){
       var erro = await r.json().catch(function(){ return {}; });
       throw new Error(erro.detail || ("estado " + r.status));
@@ -415,7 +422,10 @@ async function novoJogo(){
     indiceAtual = -1;
     proximaPalavra();
   } catch(e){
-    el("#progresso").textContent = e.message || "Não consegui montar um jogo novo.";
+    var msg = e && e.name === "AbortError"
+      ? "O servidor demorou demasiado tempo a responder. Tenta outra vez."
+      : (e.message || "Não consegui montar um jogo novo.");
+    el("#progresso").textContent = msg;
   }
 }
 
@@ -449,11 +459,28 @@ ligarSegmentadoStream("#stream-origem", "origem");
 ligarSegmentadoStream("#stream-decada", "decada");
 
 /* ============ contagem decrescente antes de começar ============ */
+var contextoAudio = null;
+function tocarBip(frequencia, duracaoMs){
+  try {
+    if (!contextoAudio) contextoAudio = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = contextoAudio.createOscillator();
+    var ganho = contextoAudio.createGain();
+    osc.type = "sine";
+    osc.frequency.value = frequencia;
+    ganho.gain.setValueAtTime(0.18, contextoAudio.currentTime);
+    ganho.gain.exponentialRampToValueAtTime(0.001, contextoAudio.currentTime + duracaoMs / 1000);
+    osc.connect(ganho); ganho.connect(contextoAudio.destination);
+    osc.start();
+    osc.stop(contextoAudio.currentTime + duracaoMs / 1000);
+  } catch(e){}
+}
+
 function correrCountdown(callback){
   var numeros = [3, 2, 1];
   el("#tela-countdown").style.display = "flex";
   function passo(i){
     if (i >= numeros.length){
+      tocarBip(880, 350); // bip final, mais agudo, a marcar o arranque
       el("#tela-countdown").style.display = "none";
       callback();
       return;
@@ -463,6 +490,7 @@ function correrCountdown(callback){
     el2.style.animation = "none";
     void el2.offsetWidth;
     el2.style.animation = "";
+    tocarBip(520, 180);
     setTimeout(function(){ passo(i + 1); }, 800);
   }
   passo(0);
