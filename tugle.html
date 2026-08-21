@@ -1166,7 +1166,18 @@ function deBase64(b){
 }
 el("#b-partilhar").onclick = function(){
   if (!atual) return;
-  var url = location.origin + location.pathname + "#p=" + paraBase64(JSON.stringify(atual));
+  var url;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(atual.id)){
+    // puzzle do dia — já existe no servidor, só precisa da data
+    url = location.origin + location.pathname + "#d=" + atual.id;
+  } else {
+    // puzzle efémero (ex.: modo personalizado) — não está gravado no
+    // servidor, por isso tem de viajar inteiro; tira a capa (o campo
+    // mais pesado) para encurtar o máximo possível
+    var leve = JSON.parse(JSON.stringify(atual));
+    (leve.entradas || []).forEach(function(e){ delete e.capa; });
+    url = location.origin + location.pathname + "#p=" + paraBase64(JSON.stringify(leve));
+  }
   if (navigator.clipboard) navigator.clipboard.writeText(url).then(function(){
     el("#pista-texto").innerHTML = "<span>Link copiado. Quem o abrir joga este puzzle.</span>";
   });
@@ -1503,13 +1514,30 @@ el("#cortina-boas-vindas").onclick = function(){ el("#b-fechar-boas-vindas").cli
   desduplicarPuzzles();
   if (puzzles.length !== totalAntes){ await guardar(); }
 
-  if (location.hash.indexOf("#p=")===0){
+  var puzzleDoLinkPartilhado = null;
+  if (location.hash.indexOf("#d=")===0){
+    var dataPartilhada = location.hash.slice(3);
+    try {
+      var r = await fetch(baseURL() + "/puzzle/" + dataPartilhada);
+      if (r.ok){ puzzleDoLinkPartilhado = await r.json(); }
+    } catch(e){}
+  } else if (location.hash.indexOf("#p=")===0){
     try { var d = JSON.parse(deBase64(location.hash.slice(3))); d.id = d.id||id(); puzzles.unshift(d); } catch(e){}
   }
 
   var conseguiuHoje = await buscarPuzzleHoje(true);
 
-  if (!conseguiuHoje){
+  if (puzzleDoLinkPartilhado){
+    var base = baseURL();
+    puzzleDoLinkPartilhado.entradas.forEach(function(e){ if (e.audio && e.audio.indexOf("http")!==0) e.audio = base + e.audio; });
+    var iPartilhado = puzzles.findIndex(function(x){ return x.id===puzzleDoLinkPartilhado.id; });
+    if (iPartilhado>-1) puzzles[iPartilhado] = puzzleDoLinkPartilhado; else puzzles.unshift(puzzleDoLinkPartilhado);
+    desduplicarPuzzles();
+    await guardar();
+    await carregar(puzzleDoLinkPartilhado);
+  }
+
+  if (!conseguiuHoje && !puzzleDoLinkPartilhado){
     if (!puzzles.length){ puzzles = [puzzleExemplo()]; await guardar(); }
     el("#sel-puzzle").value = puzzles[0].id;
     await carregar(puzzles[0]);
