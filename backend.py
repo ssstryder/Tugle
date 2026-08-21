@@ -28,7 +28,6 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -154,10 +153,6 @@ def limite_excedido(chave: str, maximo: int, janela_segundos: int) -> bool:
     return False
 
 
-async def limitar_puzzle_personalizado(request: Request) -> None:
-    ip = request.client.host if request.client else "desconhecido"
-    if limite_excedido(f"personalizado:{ip}", maximo=10, janela_segundos=60):
-        raise HTTPException(429, "Demasiados pedidos deste modo em pouco tempo. Espera um minuto e tenta outra vez.")
 # A Deezer recorta os 30s de antevisão a começar algures na música, muitas
 # vezes ainda em desvanecimento/intro. Saltar uns segundos costuma aproximar
 # do refrão — não há forma de o garantir sem analisar o áudio a sério.
@@ -662,35 +657,36 @@ async def montar_puzzle(data: dt.date) -> dict:
     }
 
 
-async def montar_puzzle_personalizado(
-    origem: str = "todos", genero: str | None = None, decada: int | None = None
-) -> dict:
-    """Puzzle gerado na hora, à medida do modo escolhido pelo jogador —
-    nunca é gravado nem partilhado (ao contrário do puzzle do dia), por
-    isso não respeita a regra dos 45 dias sem repetir: aqui é normal
-    reutilizar faixas, é um modo à parte para explorar o catálogo."""
+def id_puzzle_modo(data: dt.date, origem: str, decada: int | None) -> str:
+    sufixo_origem = origem if origem in ("nacional", "internacional") else "todos"
+    sufixo_decada = str(decada) if decada else "todas"
+    return f"{data.isoformat()}--{sufixo_origem}--{sufixo_decada}"
+
+
+async def montar_puzzle_modo(data: dt.date, origem: str, decada: int | None) -> dict:
+    """Puzzle diário de um modo (origem e/ou década) — tal como o puzzle
+    de hoje normal, é gravado e partilhado: todos os que escolherem a
+    mesma combinação no mesmo dia veem exatamente o mesmo puzzle. Nunca
+    gerado na hora."""
     async with Sessao() as sessao:
         candidatas = list((await sessao.execute(select(Faixa))).scalars().all())
 
     candidatas = [f for f in candidatas if candidatos_resposta(f)]
-
     if origem == "nacional":
         candidatas = [f for f in candidatas if not eh_internacional(f.artista)]
     elif origem == "internacional":
         candidatas = [f for f in candidatas if eh_internacional(f.artista)]
-
-    if genero:
-        candidatas = [f for f in candidatas if f.genero == genero]
     if decada:
         candidatas = [f for f in candidatas if f.decada == decada]
 
     if len(candidatas) < 6:
+        descricao = (f"dos anos {decada}" if decada else "") + (f" ({origem})" if origem != "todos" else "")
         raise RuntimeError(
-            f"Só há {len(candidatas)} faixas com este filtro — precisa de pelo menos 6. "
-            "Tenta um filtro menos restrito, ou espera o catálogo crescer mais nessa zona."
+            f"Só há {len(candidatas)} faixas {descricao or 'com este filtro'} — precisa de pelo menos 6. "
+            "O catálogo ainda está a crescer nessa zona."
         )
 
-    semente = f"{uuid4()}"
+    semente = id_puzzle_modo(data, origem, decada)
     aleatorio = random.Random(semente)
     aleatorio.shuffle(candidatas)
     candidatas = candidatas[:ENTRADAS_POR_PUZZLE]
@@ -709,90 +705,17 @@ async def montar_puzzle_personalizado(
 
     grelha = gerar_grelha(entradas)
     if grelha.get("erro") or len(grelha.get("colocadas", [])) < 5:
-        raise RuntimeError("Não consegui montar um puzzle com este filtro — tenta outro.")
-
-    ids_colocados = {c["entradaId"] for c in grelha["colocadas"]}
-    entradas_finais = [e for e in entradas if e["id"] in ids_colocados]
-
-    partes_nome = []
-    if origem == "nacional":
-        partes_nome.append("nacional")
-    elif origem == "internacional":
-        partes_nome.append("internacional")
-    if genero:
-        partes_nome.append(genero)
-    if decada:
-        partes_nome.append(f"anos {decada}")
-    nome = "Modo personalizado" + (": " + ", ".join(partes_nome) if partes_nome else "")
-
-    return {
-        "id": "modo-" + semente,
-        "nome": nome,
-        "entradas": entradas_finais,
-        "grelha": {
-            "linhas": grelha["linhas"], "colunas": grelha["colunas"],
-            "colocadas": grelha["colocadas"],
-        },
-    }
-
-
-def id_puzzle_decada(data: dt.date, origem: str, decada: int) -> str:
-    sufixo_origem = origem if origem in ("nacional", "internacional") else "todos"
-    return f"{data.isoformat()}--{sufixo_origem}--{decada}"
-
-
-async def montar_puzzle_decada(data: dt.date, origem: str, decada: int) -> dict:
-    """Puzzle diário de uma década específica — ao contrário do modo
-    personalizado, este É gravado e partilhado: todos os que escolherem
-    a mesma origem+década no mesmo dia veem exatamente o mesmo puzzle,
-    tal como o puzzle de hoje normal."""
-    async with Sessao() as sessao:
-        candidatas = list((await sessao.execute(select(Faixa))).scalars().all())
-
-    candidatas = [f for f in candidatas if candidatos_resposta(f)]
-    if origem == "nacional":
-        candidatas = [f for f in candidatas if not eh_internacional(f.artista)]
-    elif origem == "internacional":
-        candidatas = [f for f in candidatas if eh_internacional(f.artista)]
-    candidatas = [f for f in candidatas if f.decada == decada]
-
-    if len(candidatas) < 6:
-        raise RuntimeError(
-            f"Só há {len(candidatas)} faixas dos anos {decada}"
-            f"{' (' + origem + ')' if origem != 'todos' else ''} — precisa de pelo menos 6. "
-            "O catálogo ainda está a crescer nessa década."
-        )
-
-    semente = id_puzzle_decada(data, origem, decada)
-    aleatorio = random.Random(semente)
-    aleatorio.shuffle(candidatas)
-    candidatas = candidatas[:ENTRADAS_POR_PUZZLE]
-
-    entradas = []
-    for f in candidatas:
-        escolha = escolher_entrada(f, semente)
-        if not escolha:
-            continue
-        resposta, pista = escolha
-        entradas.append({
-            "id": f.id, "resposta": resposta, "titulo": f.titulo, "artista": f.artista,
-            "capa": f.capa, "genero": genero_traduzido(f.genero), "decada": f.decada,
-            "pista": pista, "inicio": INICIO_EXCERTO_SEGUNDOS,
-        })
-
-    grelha = gerar_grelha(entradas)
-    if grelha.get("erro") or len(grelha.get("colocadas", [])) < 5:
-        raise RuntimeError(f"Não consegui montar o puzzle dos anos {decada} para {data}.")
+        raise RuntimeError(f"Não consegui montar este puzzle para {data}.")
 
     ids_colocados = {c["entradaId"] for c in grelha["colocadas"]}
     entradas_finais = [e for e in entradas if e["id"] in ids_colocados]
 
     nome_origem = {"nacional": "Nacional", "internacional": "Internacional"}.get(origem, "")
-    partes_nome = [p for p in [nome_origem, f"anos {decada}"] if p]
-    nome = f"Tugle de {data.strftime('%d/%m/%Y')} — " + ", ".join(partes_nome)
+    partes_nome = [p for p in [nome_origem, f"anos {decada}" if decada else ""] if p]
+    nome = f"Tugle de {data.strftime('%d/%m/%Y')}" + (" — " + ", ".join(partes_nome) if partes_nome else "")
 
     return {
-        "id": id_puzzle_decada(data, origem, decada),
+        "id": id_puzzle_modo(data, origem, decada),
         "nome": nome,
         "data": data.isoformat(),
         "entradas": entradas_finais,
@@ -803,17 +726,20 @@ async def montar_puzzle_decada(data: dt.date, origem: str, decada: int) -> dict:
     }
 
 
-async def obter_ou_criar_decada(data: dt.date, origem: str, decada: int) -> dict:
-    pid = id_puzzle_decada(data, origem, decada)
+async def obter_ou_criar_modo(data: dt.date, origem: str, decada: int | None) -> dict:
+    if origem == "todos" and not decada:
+        return await obter_ou_criar(data)  # é literalmente o puzzle do dia normal
+    pid = id_puzzle_modo(data, origem, decada)
     async with Sessao() as sessao:
         guardado = await sessao.get(PuzzleGuardado, pid)
         if guardado and not puzzle_desatualizado(guardado.conteudo):
             return guardado.conteudo
-    puzzle = await montar_puzzle_decada(data, origem, decada)
+    puzzle = await montar_puzzle_modo(data, origem, decada)
     async with Sessao() as sessao:
         await sessao.merge(PuzzleGuardado(data=pid, conteudo=puzzle))
         await sessao.commit()
     return puzzle
+
 
 
 async def gerar_e_guardar(data: dt.date) -> dict:
@@ -989,6 +915,16 @@ async def pagina_jogo():
     return {"aviso": "coloca o tugle.html na mesma pasta do backend.py"}
 
 
+@app.get("/jogar/modo/{origem}/{decada}", include_in_schema=False)
+async def pagina_jogo_modo(origem: str, decada: str):
+    """Link próprio de cada modo (ex.: /jogar/modo/nacional/1990) — serve
+    a mesma página do jogo; é o próprio JavaScript que lê o caminho e
+    carrega o modo certo."""
+    if FICHEIRO_FRONTEND.exists():
+        return FileResponse(FICHEIRO_FRONTEND, media_type="text/html")
+    return {"aviso": "coloca o tugle.html na mesma pasta do backend.py"}
+
+
 @app.get("/stream", include_in_schema=False)
 async def pagina_stream():
     """Versão para jogar em direto na Twitch: uma palavra de cada vez,
@@ -1045,29 +981,23 @@ async def puzzle_hoje() -> dict:
     return para_cliente(await obter_ou_criar(dt.datetime.now(LISBOA).date()))
 
 
-@app.get("/puzzle/personalizado")
-async def puzzle_personalizado(
-    origem: str = "todos", genero: str | None = None, decada: int | None = None,
-    _: None = Depends(limitar_puzzle_personalizado),
-) -> dict:
+@app.get("/puzzle/hoje/modo/{origem}/{decada}")
+async def puzzle_hoje_modo(origem: str, decada: str) -> dict:
+    """Puzzle diário de um modo (origem e/ou década) — um só por dia,
+    partilhado por toda a gente que escolher essa combinação, tal como o
+    puzzle de hoje normal (mas filtrado). Nunca gerado na hora: se ainda
+    não existir, é criado agora e fica gravado para o resto do dia.
+    `decada` é 'todas' ou um ano tipo 1990."""
     if origem not in ("todos", "nacional", "internacional"):
         raise HTTPException(400, "origem tem de ser 'todos', 'nacional' ou 'internacional'")
+    decada_int: int | None = None
+    if decada != "todas":
+        try:
+            decada_int = int(decada)
+        except ValueError:
+            raise HTTPException(400, "década tem de ser 'todas' ou um ano tipo 1990")
     try:
-        puzzle = await montar_puzzle_personalizado(origem, genero, decada)
-    except RuntimeError as erro:
-        raise HTTPException(422, str(erro))
-    return para_cliente(puzzle)
-
-
-@app.get("/puzzle/hoje/decada/{decada}")
-async def puzzle_hoje_decada(decada: int, origem: str = "todos") -> dict:
-    """Puzzle diário de uma década específica — um só por dia, partilhado
-    por toda a gente que escolher essa combinação, tal como o puzzle de
-    hoje normal (mas filtrado)."""
-    if origem not in ("todos", "nacional", "internacional"):
-        raise HTTPException(400, "origem tem de ser 'todos', 'nacional' ou 'internacional'")
-    try:
-        puzzle = await obter_ou_criar_decada(dt.datetime.now(LISBOA).date(), origem, decada)
+        puzzle = await obter_ou_criar_modo(dt.datetime.now(LISBOA).date(), origem, decada_int)
     except RuntimeError as erro:
         raise HTTPException(422, str(erro))
     return para_cliente(puzzle)

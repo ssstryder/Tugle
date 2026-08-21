@@ -1253,7 +1253,7 @@ el("#b-partilhar").onclick = function(){
     url = location.origin + location.pathname + "#d=" + atual.id;
   } else if (partesId.length === 3 && /^\d{4}-\d{2}-\d{2}$/.test(partesId[0])){
     // puzzle de um modo por década — também já existe no servidor
-    url = location.origin + "/jogar/modo/" + partesId[1] + "-" + partesId[2];
+    url = location.origin + "/jogar/modo/" + partesId[1] + "/" + partesId[2];
   } else {
     // puzzle efémero (modo livre, sem década) — não está gravado no
     // servidor, por isso tem de viajar inteiro; tira a capa (o campo
@@ -1414,47 +1414,12 @@ document.addEventListener("click", function(ev){
 });
 document.addEventListener("keydown", function(ev){ if (ev.key === "Escape") fecharMenuModos(); });
 
-async function jogarModoEscolhido(){
-  var caixa = el("#estado-modos");
-  caixa.innerHTML = '<div class="aviso neutro">A montar o puzzle…</div>';
-  try {
-    var base = baseURL();
-    var url;
-    if (escolhaModo.decada){
-      // década escolhida: puzzle diário partilhado, um só por dia para toda a gente
-      var paramsDecada = new URLSearchParams({ origem: escolhaModo.origem });
-      url = base + "/puzzle/hoje/decada/" + escolhaModo.decada + "?" + paramsDecada.toString();
-    } else {
-      // sem década: modo livre, gerado na hora, só para ti
-      var params = new URLSearchParams({ origem: escolhaModo.origem });
-      url = base + "/puzzle/personalizado?" + params.toString();
-    }
-    var r = await fetch(url);
-    if (!r.ok){
-      var erro = await r.json().catch(function(){ return {}; });
-      throw new Error(erro.detail || ("estado " + r.status));
-    }
-    var p = await r.json();
-    p.entradas.forEach(function(e){ if (e.audio && e.audio.indexOf("http")!==0) e.audio = base + e.audio; });
-    caixa.innerHTML = "";
-    fecharMenuModos();
-    if (escolhaModo.decada){
-      history.pushState(null, "", "/jogar/modo/" + escolhaModo.origem + "-" + escolhaModo.decada);
-    }
-    await carregar(p);
-    irPara("jogar");
-  } catch(e){
-    caixa.innerHTML = '<div class="aviso mau">' + (e.message || "Não consegui montar este puzzle.") + '</div>';
-  }
-}
 el("#botoes-decada").addEventListener("click", function(ev){
   var alvo = ev.target.closest("[data-valor]");
   if (!alvo) return;
-  if (alvo.dataset.valor){
-    location.href = "/jogar/modo/" + escolhaModo.origem + "-" + alvo.dataset.valor;
-  } else {
-    jogarModoEscolhido();
-  }
+  var decadaEscolhida = alvo.dataset.valor || "todas";
+  fecharMenuModos();
+  location.href = "/jogar/modo/" + escolhaModo.origem + "/" + decadaEscolhida;
 });
 
 /* ============ painel lateral do arquivo ============ */
@@ -1641,11 +1606,10 @@ el("#cortina-boas-vindas").onclick = function(){ el("#b-fechar-boas-vindas").cli
       if (r.ok){ puzzleDoLinkPartilhado = await r.json(); }
     } catch(e){}
   } else if (location.pathname.indexOf("/jogar/modo/")===0){
-    var partesModo = location.pathname.slice("/jogar/modo/".length).split("-");
-    var origemModo = partesModo[0], decadaModo = partesModo[1];
+    var partesModo = location.pathname.slice("/jogar/modo/".length).split("/");
+    var origemModo = partesModo[0] || "todos", decadaModo = partesModo[1] || "todas";
     try {
-      var paramsModo = new URLSearchParams({ origem: origemModo || "todos" });
-      var rModo = await fetch(baseURL() + "/puzzle/hoje/decada/" + decadaModo + "?" + paramsModo.toString());
+      var rModo = await fetch(baseURL() + "/puzzle/hoje/modo/" + origemModo + "/" + decadaModo);
       if (rModo.ok){ puzzleDoLinkPartilhado = await rModo.json(); }
     } catch(e){}
   } else if (location.hash.indexOf("#p=")===0){
