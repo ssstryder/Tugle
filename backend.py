@@ -470,46 +470,30 @@ def escolher_campo_resposta(faixa: "Faixa", semente: str) -> str:
 
 
 def pista_para(faixa: "Faixa", semente: str, campo: str) -> str:
-    """Várias formas de dizer a mesma coisa, escolhida de forma estável
-    (a mesma música dá sempre a mesma pista nesse dia, mas dias diferentes
-    ou músicas diferentes podem calhar noutro modelo — nunca é sempre a
-    mesma frase robótica). Nunca fica vaga a mais (sempre pelo menos um
-    detalhe a identificar: ano OU género), mas também nunca obriga a
-    mencionar sempre o ano.
-    Se a resposta for o artista, a pista descreve a MÚSICA (nunca o
-    artista, senão dava a resposta) — o título entra livremente, porque
-    aí não é ele que está a ser adivinhado."""
+    """Formato único e mecânico — sempre a mesma estrutura, sem variar a
+    frase. Garante na mesma pelo menos um detalhe a mais (ano ou género,
+    quando existem), e nunca entrega a própria resposta: se a resposta
+    for o artista, a pista fala da música (nunca do artista); se for o
+    título, a pista fala do artista."""
     artista = faixa.artista
     decada = faixa.decada
     genero = faixa.genero or None
     titulo = faixa.titulo
-    aleatorio = random.Random(semente + faixa.id)
 
     if campo == "artista":
-        modelos = [f"Quem canta “{titulo}”?"]
+        partes = [f"Música “{titulo}”."]
         if decada:
-            modelos.append(f"“{titulo}”, lá dos anos {decada}. De quem é?")
-            modelos.append(f"Dos anos {decada}: “{titulo}”. Quem canta?")
+            partes.append(f"Da década de {decada}.")
         if genero:
-            modelos.append(f"Um tema de {genero} chamado “{titulo}”. Quem o canta?")
-        if genero and decada:
-            modelos.append(f"“{titulo}”, {genero} dos anos {decada}. De quem é?")
-        return aleatorio.choice(modelos)
+            partes.append(f"Género: {genero}.")
+        return " ".join(partes)
 
-    # campo == "titulo": a pista tem de dar pelo menos um detalhe a mais
-    # do que só o nome do artista — nunca fica vaga sozinha.
-    modelos = []
+    partes = [f"Música de {artista}."]
     if decada:
-        modelos.append(f"{artista}, dos anos {decada}.")
-        modelos.append(f"Uma faixa de {artista}, ainda nos anos {decada}.")
+        partes.append(f"Da década de {decada}.")
     if genero:
-        modelos.append(f"Um tema de {genero}, de {artista}.")
-    if genero and decada:
-        modelos.append(f"{genero} dos anos {decada}, por {artista}.")
-        modelos.append(f"Se é {genero} e é dos anos {decada}, é de {artista}.")
-    if not modelos:
-        modelos = [f"Uma música de {artista}."]  # só mesmo quando não há mais nenhum dado
-    return aleatorio.choice(modelos)
+        partes.append(f"Género: {genero}.")
+    return " ".join(partes)
 
     aleatorio = random.Random(semente + faixa.id)
     return aleatorio.choice(modelos)
