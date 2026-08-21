@@ -88,6 +88,10 @@
   .canal-atual{font-size:12px;color:rgba(var(--tinta-rgb),.45)}
   .canal-atual b{color:var(--carvao)}
 
+  .volume{display:flex;align-items:center;gap:8px;justify-content:center;
+    max-width:220px;margin:0 auto 24px;color:rgba(var(--tinta-rgb),.5)}
+  .volume input[type="range"]{flex:1;accent-color:var(--acento)}
+
   .aviso-config{font-size:13px;line-height:1.6;color:rgba(var(--tinta-rgb),.7);background:rgba(184,70,31,.08);
     border:1px solid rgba(184,70,31,.25);border-radius:6px;padding:14px 16px;margin-bottom:16px}
   .aviso-config code{background:rgba(var(--tinta-rgb),.08);padding:1px 5px;border-radius:3px;font-size:12px}
@@ -95,7 +99,7 @@
 
 <div class="app">
   <header class="cabecalho">
-    <div class="logo">Tug<i>le</i> <span class="sub" style="margin-left:8px">stream</span></div>
+    <a href="/" class="logo" style="text-decoration:none;color:inherit">Tug<i>le</i> <span class="sub" style="margin-left:8px">stream</span></a>
     <div class="sub" id="etiqueta-dia"></div>
   </header>
 
@@ -128,6 +132,14 @@
         <div class="disco-centro"><span class="disco-icone" id="disco-icone">▶</span></div>
       </div>
       <audio id="som" preload="none"></audio>
+      <div class="volume">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <polygon points="3,9 8,9 13,4 13,20 8,15 3,15" fill="currentColor" stroke="none"></polygon>
+          <path d="M16 8.5c1.2 1 1.2 6 0 7"></path>
+          <path d="M18.5 6c2.2 2 2.2 10 0 12"></path>
+        </svg>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
+      </div>
       <div class="pista" id="pista">—</div>
       <div class="meta-pista" id="meta-pista"></div>
       <div id="zona-resposta"></div>
@@ -150,7 +162,7 @@
 
 <script>
 /* ============ configuração — troca pelo teu Client ID da Twitch ============ */
-var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
+var CLIENT_ID = "COLOCA_AQUI_O_TEU_CLIENT_ID";
 
 function el(s){ return document.querySelector(s); }
 function normalizar(t){
@@ -231,6 +243,18 @@ el("#disco").onclick = function(){
   som.load();
 };
 el("#som").onended = pararSom;
+
+var volumeGuardado = parseFloat(localStorage.getItem("tugle_stream_volume"));
+if (!isNaN(volumeGuardado)){
+  el("#volume").value = volumeGuardado;
+  el("#som").volume = volumeGuardado;
+} else {
+  el("#som").volume = el("#volume").value;
+}
+el("#volume").addEventListener("input", function(){
+  el("#som").volume = this.value;
+  localStorage.setItem("tugle_stream_volume", this.value);
+});
 
 function acertou(utilizador){
   if (respondida || indiceAtual >= entradas.length) return;
