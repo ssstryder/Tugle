@@ -347,7 +347,6 @@
           <div id="check-contagem" style="padding:8px 10px 4px;font-size:11px;color:rgba(var(--tinta-rgb),.45);border-top:1px solid var(--linha);margin-top:2px"></div>
         </div>
       </div>
-      <button class="abrir-lateral" id="b-abrir-arquivo">Arquivo</button>
     </nav>
   </header>
 
@@ -1620,7 +1619,6 @@ function fecharLateral(){
   el("#cortina").classList.remove("aberta");
   el("#lateral").classList.remove("aberta");
 }
-el("#b-abrir-arquivo").onclick = abrirLateral;
 el("#b-abrir-arquivo-barra").onclick = abrirLateral;
 el("#b-fechar-arquivo").onclick = fecharLateral;
 el("#cortina").onclick = fecharLateral;
