@@ -483,33 +483,48 @@ async def garantir_catalogo(minimo: int, limite_por_chamada: int = 25) -> None:
 # ---------------------------------------------------------------- montagem do puzzle diário
 
 def candidatos_resposta(faixa: "Faixa") -> list[tuple[str, str]]:
-    """Todas as hipóteses válidas de resposta para esta música — não só o
-    título ou o artista inteiros, mas também palavras isoladas do título
-    ou do nome do artista, quando há mais que uma palavra. Cada hipótese
-    vem com a pista certa, curta e direta (sem frases compridas)."""
+    """Todas as hipóteses válidas de resposta para esta música, cada uma
+    com várias frases possíveis — a curta e direta é só mais uma opção,
+    não a única, para não ficar sempre a mesma fórmula repetida."""
     titulo = (faixa.titulo or "").strip()
     artista = (faixa.artista or "").strip()
+    decada = faixa.decada
+    genero = faixa.genero or None
     candidatos: list[tuple[str, str]] = []
 
     def cabe(palavra: str) -> bool:
         return 3 <= len(normalizar(palavra)) <= 14
 
     if cabe(titulo):
-        candidatos.append((titulo, "Título da música."))
+        frases = ["Título da música.", f"Uma música de {artista}."]
+        if decada:
+            frases.append(f"Música de {artista}, dos anos {decada}.")
+        if genero:
+            frases.append(f"Um tema de {genero}, de {artista}.")
+        candidatos.extend((titulo, f) for f in frases)
+
     if cabe(artista):
-        candidatos.append((artista, "Nome do artista."))
+        frases = ["Nome do artista.", f"Quem canta “{titulo}”?"]
+        if decada:
+            frases.append(f"“{titulo}”, dos anos {decada}. Quem canta?")
+        if genero:
+            frases.append(f"Um tema de {genero} chamado “{titulo}”. Quem o canta?")
+        candidatos.extend((artista, f) for f in frases)
 
     palavras_titulo = titulo.split()
     if len(palavras_titulo) > 1:
         if cabe(palavras_titulo[0]):
             candidatos.append((palavras_titulo[0], "Primeira palavra do título."))
+            candidatos.append((palavras_titulo[0], f"Como começa “{titulo}”?"))
         if palavras_titulo[-1] != palavras_titulo[0] and cabe(palavras_titulo[-1]):
             candidatos.append((palavras_titulo[-1], "Última palavra do título."))
+            candidatos.append((palavras_titulo[-1], f"Como termina “{titulo}”?"))
 
     palavras_artista = artista.split()
     if len(palavras_artista) > 1:
         if cabe(palavras_artista[0]):
             candidatos.append((palavras_artista[0], "Primeira palavra do nome do artista."))
+            candidatos.append((palavras_artista[0], f"Como começa o nome de {artista}?"))
 
     return candidatos
 
