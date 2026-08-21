@@ -581,17 +581,20 @@ def candidatos_resposta(faixa: "Faixa") -> list[tuple[str, str]]:
     palavras_titulo = titulo.split()
     if len(palavras_titulo) > 1:
         if cabe(palavras_titulo[0]):
+            resto = " ".join(palavras_titulo[1:])
             candidatos.append((palavras_titulo[0], "Primeira palavra do título."))
-            candidatos.append((palavras_titulo[0], f"Como começa “{titulo}”?"))
+            candidatos.append((palavras_titulo[0], f"Como começa “___ {resto}”?"))
         if palavras_titulo[-1] != palavras_titulo[0] and cabe(palavras_titulo[-1]):
+            resto = " ".join(palavras_titulo[:-1])
             candidatos.append((palavras_titulo[-1], "Última palavra do título."))
-            candidatos.append((palavras_titulo[-1], f"Como termina “{titulo}”?"))
+            candidatos.append((palavras_titulo[-1], f"Como termina “{resto} ___”?"))
 
     palavras_artista = artista.split()
     if len(palavras_artista) > 1:
         if cabe(palavras_artista[0]):
+            resto = " ".join(palavras_artista[1:])
             candidatos.append((palavras_artista[0], "Primeira palavra do nome do artista."))
-            candidatos.append((palavras_artista[0], f"Como começa o nome de {artista}?"))
+            candidatos.append((palavras_artista[0], f"Como começa o nome “___ {resto}”?"))
 
     return candidatos
 
