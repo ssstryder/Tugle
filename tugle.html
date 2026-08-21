@@ -100,6 +100,16 @@
     letter-spacing:.1em;text-transform:uppercase;transition:padding .15s,color .15s}
   .aba-borda:hover{padding-left:12px;color:var(--acento)}
   .aba-borda.escondida{opacity:0;pointer-events:none}
+
+  .grupo-modo{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .btn-opcao{appearance:none;border:1px solid var(--linha-forte);background:none;
+    color:var(--carvao);font:500 13px/1 var(--sans);padding:8px 12px;border-radius:20px;
+    cursor:pointer;transition:background .12s,border-color .12s,color .12s}
+  .btn-opcao:hover{border-color:var(--carvao)}
+  .btn-opcao.ativo{background:var(--carvao);color:var(--osso);border-color:var(--carvao)}
+  .rotulo-modo{font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;
+    color:rgba(var(--tinta-rgb),.5);display:block;margin-top:18px}
+  .rotulo-modo:first-of-type{margin-top:0}
   .lateral-cabecalho{display:flex;justify-content:space-between;align-items:baseline;
     margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--linha)}
   .lateral-cabecalho h2{font-family:var(--serif);font-weight:400;font-size:26px;margin:0}
@@ -483,29 +493,24 @@
     Um puzzle à parte, gerado na hora, sem ligação ao puzzle do dia — podes jogar
     quantas vezes quiseres, com os filtros que escolheres.
   </p>
-  <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:18px">
-    <label style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5)">
-      Origem
-      <select id="modo-origem" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--linha-forte);background:var(--osso);color:var(--carvao);border-radius:4px;font:500 14px/1 var(--sans)">
-        <option value="todos">Todos</option>
-        <option value="nacional">Nacional</option>
-        <option value="internacional">Internacional</option>
-      </select>
-    </label>
-    <label style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5)">
-      Género
-      <select id="modo-genero" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--linha-forte);background:var(--osso);color:var(--carvao);border-radius:4px;font:500 14px/1 var(--sans)">
-        <option value="">Qualquer género</option>
-      </select>
-    </label>
-    <label style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5)">
-      Década
-      <select id="modo-decada" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--linha-forte);background:var(--osso);color:var(--carvao);border-radius:4px;font:500 14px/1 var(--sans)">
-        <option value="">Qualquer década</option>
-      </select>
-    </label>
+  <span class="rotulo-modo">Origem</span>
+  <div class="grupo-modo" id="botoes-origem" data-tipo="origem">
+    <button class="btn-opcao ativo" data-valor="todos">Todos</button>
+    <button class="btn-opcao" data-valor="nacional">Nacional</button>
+    <button class="btn-opcao" data-valor="internacional">Internacional</button>
   </div>
-  <button class="btn primario" id="b-jogar-modo" style="width:100%">Jogar este modo</button>
+
+  <span class="rotulo-modo">Género</span>
+  <div class="grupo-modo" id="botoes-genero" data-tipo="genero">
+    <button class="btn-opcao ativo" data-valor="">Qualquer</button>
+  </div>
+
+  <span class="rotulo-modo">Década</span>
+  <div class="grupo-modo" id="botoes-decada" data-tipo="decada">
+    <button class="btn-opcao ativo" data-valor="">Qualquer</button>
+  </div>
+
+  <button class="btn primario" id="b-jogar-modo" style="width:100%;margin-top:22px">Jogar este modo</button>
   <div id="estado-modos" style="margin-top:12px"></div>
 </aside>
 
@@ -1285,19 +1290,36 @@ document.querySelectorAll(".aba[data-vista]").forEach(function(b){
 });
 
 /* ============ modos de jogo ============ */
+var escolhaModo = { origem: "todos", genero: "", decada: "" };
 var opcoesModoCarregadas = false;
+
+function selecionarBotaoModo(grupo, valor){
+  grupo.querySelectorAll(".btn-opcao").forEach(function(b){
+    b.classList.toggle("ativo", b.dataset.valor === valor);
+  });
+}
+function ligarGrupoModo(grupo){
+  grupo.addEventListener("click", function(ev){
+    var b = ev.target.closest(".btn-opcao");
+    if (!b) return;
+    escolhaModo[grupo.dataset.tipo] = b.dataset.valor;
+    selecionarBotaoModo(grupo, b.dataset.valor);
+  });
+}
+["#botoes-origem","#botoes-genero","#botoes-decada"].forEach(function(sel){ ligarGrupoModo(el(sel)); });
+
 async function carregarOpcoesModo(){
   if (opcoesModoCarregadas) return;
   try {
     var r = await fetch(baseURL() + "/opcoes-modo");
     if (!r.ok) throw new Error("estado "+r.status);
     var d = await r.json();
-    var selGenero = el("#modo-genero"), selDecada = el("#modo-decada");
+    var grupoGenero = el("#botoes-genero"), grupoDecada = el("#botoes-decada");
     (d.generos || []).forEach(function(g){
-      var o = criar("option", null, g); o.value = g; selGenero.appendChild(o);
+      var b = criar("button","btn-opcao",g); b.dataset.valor = g; grupoGenero.appendChild(b);
     });
     (d.decadas || []).forEach(function(dec){
-      var o = criar("option", null, "Anos " + dec); o.value = dec; selDecada.appendChild(o);
+      var b = criar("button","btn-opcao","Anos "+dec); b.dataset.valor = dec; grupoDecada.appendChild(b);
     });
     opcoesModoCarregadas = true;
   } catch(e){
@@ -1320,16 +1342,13 @@ el("#b-fechar-modos").onclick = fecharModos;
 el("#cortina-modos").onclick = fecharModos;
 
 el("#b-jogar-modo").onclick = async function(){
-  var origem = el("#modo-origem").value;
-  var genero = el("#modo-genero").value;
-  var decada = el("#modo-decada").value;
   var caixa = el("#estado-modos");
   caixa.innerHTML = '<div class="aviso neutro">A montar o puzzle…</div>';
   el("#b-jogar-modo").disabled = true;
   try {
-    var params = new URLSearchParams({ origem: origem });
-    if (genero) params.set("genero", genero);
-    if (decada) params.set("decada", decada);
+    var params = new URLSearchParams({ origem: escolhaModo.origem });
+    if (escolhaModo.genero) params.set("genero", escolhaModo.genero);
+    if (escolhaModo.decada) params.set("decada", escolhaModo.decada);
     var base = baseURL();
     var r = await fetch(base + "/puzzle/personalizado?" + params.toString());
     if (!r.ok){
