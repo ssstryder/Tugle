@@ -346,6 +346,7 @@
           <div id="check-contagem" style="padding:8px 10px 4px;font-size:11px;color:rgba(var(--tinta-rgb),.45);border-top:1px solid var(--linha);margin-top:2px"></div>
         </div>
       </div>
+      <button class="aba" id="b-abrir-modos">Modos</button>
     </nav>
   </header>
 
@@ -458,6 +459,42 @@
   <p class="ajuda">Escolhe um dia para jogar o puzzle correspondente.</p>
   <div id="estado-arquivo"></div>
   <ol id="lista-arquivo" style="list-style:none;margin:0;padding:0"></ol>
+</aside>
+
+<div class="cortina" id="cortina-modos"></div>
+<aside class="lateral" id="lateral-modos">
+  <div class="lateral-cabecalho">
+    <h2>Modos de jogo</h2>
+    <button class="lateral-fechar" id="b-fechar-modos" aria-label="Fechar">×</button>
+  </div>
+  <p class="ajuda">
+    Um puzzle à parte, gerado na hora, sem ligação ao puzzle do dia — podes jogar
+    quantas vezes quiseres, com os filtros que escolheres.
+  </p>
+  <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:18px">
+    <label style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5)">
+      Origem
+      <select id="modo-origem" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--linha-forte);background:var(--osso);color:var(--carvao);border-radius:4px;font:500 14px/1 var(--sans)">
+        <option value="todos">Todos</option>
+        <option value="nacional">Nacional</option>
+        <option value="internacional">Internacional</option>
+      </select>
+    </label>
+    <label style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5)">
+      Género
+      <select id="modo-genero" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--linha-forte);background:var(--osso);color:var(--carvao);border-radius:4px;font:500 14px/1 var(--sans)">
+        <option value="">Qualquer género</option>
+      </select>
+    </label>
+    <label style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5)">
+      Década
+      <select id="modo-decada" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--linha-forte);background:var(--osso);color:var(--carvao);border-radius:4px;font:500 14px/1 var(--sans)">
+        <option value="">Qualquer década</option>
+      </select>
+    </label>
+  </div>
+  <button class="btn primario" id="b-jogar-modo" style="width:100%">Jogar este modo</button>
+  <div id="estado-modos" style="margin-top:12px"></div>
 </aside>
 
 <input class="fantasma" id="fantasma" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
@@ -1223,6 +1260,69 @@ function irPara(v){
 document.querySelectorAll(".aba[data-vista]").forEach(function(b){
   b.onclick = function(){ irPara(b.dataset.vista); };
 });
+
+/* ============ modos de jogo ============ */
+var opcoesModoCarregadas = false;
+async function carregarOpcoesModo(){
+  if (opcoesModoCarregadas) return;
+  try {
+    var r = await fetch(baseURL() + "/opcoes-modo");
+    if (!r.ok) throw new Error("estado "+r.status);
+    var d = await r.json();
+    var selGenero = el("#modo-genero"), selDecada = el("#modo-decada");
+    (d.generos || []).forEach(function(g){
+      var o = criar("option", null, g); o.value = g; selGenero.appendChild(o);
+    });
+    (d.decadas || []).forEach(function(dec){
+      var o = criar("option", null, "Anos " + dec); o.value = dec; selDecada.appendChild(o);
+    });
+    opcoesModoCarregadas = true;
+  } catch(e){
+    el("#estado-modos").innerHTML = '<div class="aviso mau">Não consegui ir buscar os filtros disponíveis.</div>';
+  }
+}
+function abrirModos(){
+  el("#cortina-modos").classList.add("aberta");
+  el("#lateral-modos").classList.add("aberta");
+  carregarOpcoesModo();
+}
+function fecharModos(){
+  el("#cortina-modos").classList.remove("aberta");
+  el("#lateral-modos").classList.remove("aberta");
+}
+el("#b-abrir-modos").onclick = abrirModos;
+el("#b-fechar-modos").onclick = fecharModos;
+el("#cortina-modos").onclick = fecharModos;
+
+el("#b-jogar-modo").onclick = async function(){
+  var origem = el("#modo-origem").value;
+  var genero = el("#modo-genero").value;
+  var decada = el("#modo-decada").value;
+  var caixa = el("#estado-modos");
+  caixa.innerHTML = '<div class="aviso neutro">A montar o puzzle…</div>';
+  el("#b-jogar-modo").disabled = true;
+  try {
+    var params = new URLSearchParams({ origem: origem });
+    if (genero) params.set("genero", genero);
+    if (decada) params.set("decada", decada);
+    var base = baseURL();
+    var r = await fetch(base + "/puzzle/personalizado?" + params.toString());
+    if (!r.ok){
+      var erro = await r.json().catch(function(){ return {}; });
+      throw new Error(erro.detail || ("estado " + r.status));
+    }
+    var p = await r.json();
+    p.entradas.forEach(function(e){ if (e.audio && e.audio.indexOf("http")!==0) e.audio = base + e.audio; });
+    caixa.innerHTML = "";
+    fecharModos();
+    await carregar(p);
+    irPara("jogar");
+  } catch(e){
+    caixa.innerHTML = '<div class="aviso mau">' + (e.message || "Não consegui montar este puzzle.") + '</div>';
+  } finally {
+    el("#b-jogar-modo").disabled = false;
+  }
+};
 
 /* ============ painel lateral do arquivo ============ */
 var CHAVE_CONCLUIDOS = "tugle:concluidos";

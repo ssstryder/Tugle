@@ -26,6 +26,7 @@ import unicodedata
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -169,9 +170,33 @@ ARTISTAS = [
 ]
 
 
-def artistas_do_dia(data: dt.date, quantos: int) -> list[str]:
+ARTISTAS_INTERNACIONAIS = [
+    "Taylor Swift", "Ed Sheeran", "Adele", "Bruno Mars", "The Weeknd",
+    "Beyoncé", "Drake", "Rihanna", "Coldplay", "Imagine Dragons",
+    "Dua Lipa", "Ariana Grande", "Billie Eilish", "Justin Bieber",
+    "Michael Jackson", "Queen", "The Beatles", "Eminem", "Kendrick Lamar",
+    "Bad Bunny", "Shakira", "Maroon 5", "Katy Perry", "Lady Gaga",
+    "Post Malone", "Harry Styles", "Olivia Rodrigo", "SZA", "Kanye West",
+    "Sia", "Sam Smith", "Ozzy Osbourne", "Metallica", "Linkin Park",
+    "Red Hot Chili Peppers", "Foo Fighters", "Radiohead", "U2",
+    "Elton John", "Whitney Houston", "Stevie Wonder", "Bee Gees",
+    "ABBA", "Daft Punk", "David Bowie", "Prince", "Amy Winehouse",
+    "Rosalía", "J Balvin", "Karol G",
+]
+
+
+def eh_internacional(artista: str) -> bool:
+    return normalizar(artista) in {normalizar(a) for a in ARTISTAS_INTERNACIONAIS}
+
+
+def todos_os_artistas() -> list[str]:
+    return ARTISTAS + ARTISTAS_INTERNACIONAIS
+
+
+def artistas_do_dia(data: dt.date, quantos: int, lista: list[str] | None = None) -> list[str]:
+    lista = lista if lista is not None else ARTISTAS
     aleatorio = random.Random(data.isoformat())
-    return aleatorio.sample(ARTISTAS, min(quantos, len(ARTISTAS)))
+    return aleatorio.sample(lista, min(quantos, len(lista)))
 
 
 def limpar_titulo(t: str) -> str:
@@ -431,7 +456,7 @@ async def garantir_catalogo(minimo: int, limite_por_chamada: int = 25) -> None:
 
         print(f"[tugle] catálogo tem {total} faixas, a construir até {minimo} (até {limite_por_chamada} artistas nesta chamada)…")
         explorados = 0
-        for artista in artistas_do_dia(dt.date.today(), len(ARTISTAS)):
+        for artista in artistas_do_dia(dt.date.today(), len(todos_os_artistas()), todos_os_artistas()):
             if total >= minimo or explorados >= limite_por_chamada:
                 break
             explorados += 1
@@ -569,6 +594,81 @@ async def montar_puzzle(data: dt.date) -> dict:
         "nome": f"Tugle de {data.strftime('%d/%m/%Y')}" + (f" — {nome_tema}" if nome_tema else ""),
         "data": data.isoformat(),
         "tema": nome_tema,
+        "entradas": entradas_finais,
+        "grelha": {
+            "linhas": grelha["linhas"], "colunas": grelha["colunas"],
+            "colocadas": grelha["colocadas"],
+        },
+    }
+
+
+async def montar_puzzle_personalizado(
+    origem: str = "todos", genero: str | None = None, decada: int | None = None
+) -> dict:
+    """Puzzle gerado na hora, à medida do modo escolhido pelo jogador —
+    nunca é gravado nem partilhado (ao contrário do puzzle do dia), por
+    isso não respeita a regra dos 45 dias sem repetir: aqui é normal
+    reutilizar faixas, é um modo à parte para explorar o catálogo."""
+    async with Sessao() as sessao:
+        candidatas = list((await sessao.execute(select(Faixa))).scalars().all())
+
+    candidatas = [
+        f for f in candidatas
+        if 3 <= len(normalizar(f.titulo)) <= 14 or 3 <= len(normalizar(f.artista)) <= 14
+    ]
+
+    if origem == "nacional":
+        candidatas = [f for f in candidatas if not eh_internacional(f.artista)]
+    elif origem == "internacional":
+        candidatas = [f for f in candidatas if eh_internacional(f.artista)]
+
+    if genero:
+        candidatas = [f for f in candidatas if f.genero == genero]
+    if decada:
+        candidatas = [f for f in candidatas if f.decada == decada]
+
+    if len(candidatas) < 6:
+        raise RuntimeError(
+            f"Só há {len(candidatas)} faixas com este filtro — precisa de pelo menos 6. "
+            "Tenta um filtro menos restrito, ou espera o catálogo crescer mais nessa zona."
+        )
+
+    semente = f"{uuid4()}"
+    aleatorio = random.Random(semente)
+    aleatorio.shuffle(candidatas)
+    candidatas = candidatas[:ENTRADAS_POR_PUZZLE]
+
+    entradas = []
+    for f in candidatas:
+        campo = escolher_campo_resposta(f, semente)
+        resposta = f.titulo if campo == "titulo" else f.artista
+        entradas.append({
+            "id": f.id, "resposta": resposta, "titulo": f.titulo, "artista": f.artista,
+            "capa": f.capa, "genero": f.genero, "decada": f.decada,
+            "pista": pista_para(f, semente, campo), "inicio": INICIO_EXCERTO_SEGUNDOS,
+        })
+
+    grelha = gerar_grelha(entradas)
+    if grelha.get("erro") or len(grelha.get("colocadas", [])) < 5:
+        raise RuntimeError("Não consegui montar um puzzle com este filtro — tenta outro.")
+
+    ids_colocados = {c["entradaId"] for c in grelha["colocadas"]}
+    entradas_finais = [e for e in entradas if e["id"] in ids_colocados]
+
+    partes_nome = []
+    if origem == "nacional":
+        partes_nome.append("nacional")
+    elif origem == "internacional":
+        partes_nome.append("internacional")
+    if genero:
+        partes_nome.append(genero)
+    if decada:
+        partes_nome.append(f"anos {decada}")
+    nome = "Modo personalizado" + (": " + ", ".join(partes_nome) if partes_nome else "")
+
+    return {
+        "id": "modo-" + semente,
+        "nome": nome,
         "entradas": entradas_finais,
         "grelha": {
             "linhas": grelha["linhas"], "colunas": grelha["colunas"],
@@ -789,6 +889,32 @@ async def regenerar_hoje(_: None = Depends(exigir_chave_admin)) -> dict:
 @app.get("/puzzle/hoje")
 async def puzzle_hoje() -> dict:
     return para_cliente(await obter_ou_criar(dt.datetime.now(LISBOA).date()))
+
+
+@app.get("/puzzle/personalizado")
+async def puzzle_personalizado(
+    origem: str = "todos", genero: str | None = None, decada: int | None = None
+) -> dict:
+    if origem not in ("todos", "nacional", "internacional"):
+        raise HTTPException(400, "origem tem de ser 'todos', 'nacional' ou 'internacional'")
+    try:
+        puzzle = await montar_puzzle_personalizado(origem, genero, decada)
+    except RuntimeError as erro:
+        raise HTTPException(422, str(erro))
+    return para_cliente(puzzle)
+
+
+@app.get("/opcoes-modo")
+async def opcoes_modo() -> dict:
+    """Géneros e décadas que existem mesmo no catálogo, para o seletor de
+    modos nunca oferecer uma combinação que dá zero resultados."""
+    async with Sessao() as sessao:
+        generos = (await sessao.execute(select(Faixa.genero))).scalars().all()
+        decadas = (await sessao.execute(select(Faixa.decada))).scalars().all()
+    return {
+        "generos": sorted({g for g in generos if g}),
+        "decadas": sorted({d for d in decadas if d}),
+    }
 
 
 @app.get("/puzzles")
