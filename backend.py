@@ -785,6 +785,9 @@ def puzzle_desatualizado(puzzle: dict) -> bool:
             return True
         if not (3 <= len(normalizar(e.get("resposta", ""))) <= 14):
             return True
+        genero_bruto = (e.get("genero") or "").strip().lower()
+        if genero_bruto in TRADUCAO_GENEROS:
+            return True  # género ainda por traduzir (ex.: "Afrikanische Musik")
     return False
 
 
@@ -1012,7 +1015,10 @@ async def puzzle_por_data(data: str) -> dict:
         guardado = await sessao.get(PuzzleGuardado, d.isoformat())
     if not guardado:
         raise HTTPException(404, "Ainda não há puzzle guardado para esse dia.")
-    return para_cliente(guardado.conteudo)
+    conteudo = guardado.conteudo
+    if puzzle_desatualizado(conteudo):
+        conteudo = await gerar_e_guardar(d)
+    return para_cliente(conteudo)
 
 
 @app.get("/catalogo/resumo")
