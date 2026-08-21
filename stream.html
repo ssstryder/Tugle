@@ -25,7 +25,7 @@
   .logo i{color:var(--acento);font-style:italic}
   .sub{font:500 12px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.45)}
 
-  .ligacao{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:16px 0;border-bottom:1px solid var(--linha);margin-bottom:24px}
+  .ligacao{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:16px 0;border-bottom:1px solid var(--linha);margin-bottom:16px}
   input[type="text"]{font:500 15px/1 var(--sans);padding:11px 14px;border:1px solid var(--linha-forte);
     background:var(--osso);color:var(--carvao);border-radius:4px;min-width:220px}
   input[type="text"]:focus{outline:2px solid var(--acento);outline-offset:1px}
@@ -34,11 +34,18 @@
   .btn:hover{background:rgba(var(--tinta-rgb),.06)}
   .btn.primario{background:var(--carvao);color:var(--osso);border-color:var(--carvao)}
   .btn.primario:hover{opacity:.88}
+  .btn.roxo{background:#9146FF;color:#fff;border-color:#9146FF}
+  .btn.roxo:hover{opacity:.88}
   .btn.suave{opacity:.75}
   .btn:disabled{opacity:.4;cursor:default}
   .estado-ligacao{font:600 12px/1 var(--sans);padding:6px 10px;border-radius:20px}
   .estado-ligacao.on{color:#3E7A4E;background:rgba(62,122,78,.12)}
   .estado-ligacao.off{color:rgba(var(--tinta-rgb),.4);background:rgba(var(--tinta-rgb),.06)}
+
+  .conta{display:flex;gap:10px;align-items:center;padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
+  .conta .quem{font-size:13px;color:rgba(var(--tinta-rgb),.6)}
+  .conta .quem b{color:var(--carvao)}
+  .opcao{display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(var(--tinta-rgb),.7)}
 
   .zona{display:grid;grid-template-columns:1fr 300px;gap:32px}
   @media (max-width:760px){.zona{grid-template-columns:1fr}}
@@ -80,6 +87,10 @@
 
   .canal-atual{font-size:12px;color:rgba(var(--tinta-rgb),.45)}
   .canal-atual b{color:var(--carvao)}
+
+  .aviso-config{font-size:13px;line-height:1.6;color:rgba(var(--tinta-rgb),.7);background:rgba(184,70,31,.08);
+    border:1px solid rgba(184,70,31,.25);border-radius:6px;padding:14px 16px;margin-bottom:16px}
+  .aviso-config code{background:rgba(var(--tinta-rgb),.08);padding:1px 5px;border-radius:3px;font-size:12px}
 </style>
 
 <div class="app">
@@ -87,6 +98,21 @@
     <div class="logo">Tug<i>le</i> <span class="sub" style="margin-left:8px">stream</span></div>
     <div class="sub" id="etiqueta-dia"></div>
   </header>
+
+  <div id="aviso-sem-client-id" class="aviso-config" style="display:none">
+    Ainda não configuraste o <code>CLIENT_ID</code> da Twitch neste ficheiro — sem isso só dá para ligar em modo
+    leitura anónima (não consegue escrever no chat). Vê as instruções que o Claude te deu para criares a app na Twitch.
+  </div>
+
+  <div class="conta" id="zona-conta">
+    <button class="btn roxo" id="b-login-twitch">Entrar com a Twitch</button>
+    <span class="quem" id="quem-esta-ligado" style="display:none"></span>
+    <button class="btn suave" id="b-logout" style="display:none">Sair</button>
+    <label class="opcao">
+      <input type="checkbox" id="anunciar-no-chat" checked>
+      Anunciar acertos no chat (precisa de login)
+    </label>
+  </div>
 
   <div class="ligacao">
     <input type="text" id="canal" placeholder="nome do canal na Twitch (ex.: sstryder)">
@@ -123,12 +149,21 @@
 </div>
 
 <script>
+/* ============ configuração — troca pelo teu Client ID da Twitch ============ */
+var CLIENT_ID = "COLOCA_AQUI_O_TEU_CLIENT_ID";
+
 function el(s){ return document.querySelector(s); }
 function normalizar(t){
   return (t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g,"");
 }
 function criar(tag,cls,txt){ var e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; }
 
+if (!CLIENT_ID || CLIENT_ID.indexOf("COLOCA_AQUI") === 0){
+  el("#aviso-sem-client-id").style.display = "block";
+  el("#b-login-twitch").disabled = true;
+}
+
+/* ============ puzzle de hoje ============ */
 var entradas = [], indiceAtual = -1, respondida = false;
 var placar = {};
 
@@ -209,6 +244,10 @@ function acertou(utilizador){
   el("#b-saltar").disabled = true;
   el("#b-revelar").disabled = true;
   el("#b-proxima").style.display = "inline-block";
+
+  if (el("#anunciar-no-chat").checked){
+    enviarMensagemChat("\ud83c\udf89 " + utilizador + " acertou! A resposta era: " + e.resposta);
+  }
 }
 
 el("#b-saltar").onclick = function(){
@@ -223,11 +262,15 @@ el("#b-saltar").onclick = function(){
 el("#b-revelar").onclick = function(){
   if (respondida || indiceAtual >= entradas.length) return;
   respondida = true;
+  var e = entradaAtual();
   pararSom();
-  el("#zona-resposta").innerHTML = '<div class="resposta-revelada saltada">Resposta: ' + entradaAtual().resposta + '</div>';
+  el("#zona-resposta").innerHTML = '<div class="resposta-revelada saltada">Resposta: ' + e.resposta + '</div>';
   el("#b-saltar").disabled = true;
   el("#b-revelar").disabled = true;
   el("#b-proxima").style.display = "inline-block";
+  if (el("#anunciar-no-chat").checked){
+    enviarMensagemChat("A resposta era: " + e.resposta + ". Próxima!");
+  }
 };
 el("#b-proxima").onclick = proximaPalavra;
 
@@ -250,20 +293,85 @@ el("#b-reiniciar-placar").onclick = function(){
   desenharPlacar();
 };
 
-var ws = null;
+/* ============ login com a Twitch (OAuth, para poder escrever no chat) ============ */
+function urlLoginTwitch(){
+  var redirect = encodeURIComponent(location.origin + location.pathname);
+  var scope = encodeURIComponent("chat:read chat:edit");
+  return "https://id.twitch.tv/oauth2/authorize?client_id=" + CLIENT_ID +
+    "&redirect_uri=" + redirect + "&response_type=token&scope=" + scope;
+}
+function lerTokenGuardado(){
+  var hash = location.hash.startsWith("#") ? location.hash.slice(1) : location.hash;
+  var params = new URLSearchParams(hash);
+  var token = params.get("access_token");
+  if (token){
+    sessionStorage.setItem("tugle_twitch_token", token);
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  return token || sessionStorage.getItem("tugle_twitch_token");
+}
+async function obterUtilizadorTwitch(token){
+  try {
+    var r = await fetch("https://api.twitch.tv/helix/users", {
+      headers: { "Authorization": "Bearer " + token, "Client-Id": CLIENT_ID }
+    });
+    if (!r.ok) return null;
+    var d = await r.json();
+    return (d.data && d.data[0]) ? d.data[0].login : null;
+  } catch(e){ return null; }
+}
+
+var tokenTwitch = null, utilizadorTwitch = null;
+
+async function verificarLoginExistente(){
+  var token = lerTokenGuardado();
+  if (!token) return;
+  var utilizador = await obterUtilizadorTwitch(token);
+  if (!utilizador){
+    sessionStorage.removeItem("tugle_twitch_token");
+    return;
+  }
+  tokenTwitch = token; utilizadorTwitch = utilizador;
+  mostrarSessaoLigada();
+}
+function mostrarSessaoLigada(){
+  el("#b-login-twitch").style.display = "none";
+  el("#quem-esta-ligado").style.display = "inline";
+  el("#quem-esta-ligado").innerHTML = "Ligado como <b>" + utilizadorTwitch + "</b>";
+  el("#b-logout").style.display = "inline-block";
+  if (!el("#canal").value) el("#canal").value = utilizadorTwitch;
+}
+el("#b-login-twitch").onclick = function(){ location.href = urlLoginTwitch(); };
+el("#b-logout").onclick = function(){
+  sessionStorage.removeItem("tugle_twitch_token");
+  tokenTwitch = null; utilizadorTwitch = null;
+  el("#b-login-twitch").style.display = "inline-block";
+  el("#quem-esta-ligado").style.display = "none";
+  el("#b-logout").style.display = "none";
+};
+
+/* ============ chat da Twitch (leitura sempre; escrita só com login) ============ */
+var ws = null, canalLigado = "";
 
 function ligarTwitch(canal){
   canal = canal.trim().toLowerCase().replace(/^#/, "");
   if (!canal) return;
   if (ws){ try { ws.close(); } catch(e){} }
+  canalLigado = canal;
 
   el("#estado-ligacao").textContent = "A ligar\u2026";
   el("#estado-ligacao").className = "estado-ligacao off";
 
   ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
   ws.onopen = function(){
-    ws.send("PASS SCHMOOPIIE");
-    ws.send("NICK justinfan" + Math.floor(10000 + Math.random()*89999));
+    if (tokenTwitch && utilizadorTwitch){
+      ws.send("CAP REQ :twitch.tv/commands");
+      ws.send("PASS oauth:" + tokenTwitch);
+      ws.send("NICK " + utilizadorTwitch);
+    } else {
+      ws.send("PASS SCHMOOPIIE");
+      ws.send("NICK justinfan" + Math.floor(10000 + Math.random()*89999));
+    }
     ws.send("JOIN #" + canal);
   };
   ws.onmessage = function(ev){
@@ -278,7 +386,13 @@ function ligarTwitch(canal){
     el("#estado-ligacao").className = "estado-ligacao off";
   };
 
-  el("#canal-atual").innerHTML = "Canal: <b>#" + canal + "</b>";
+  el("#canal-atual").innerHTML = "Canal: <b>#" + canal + "</b>" +
+    (tokenTwitch ? " · a escrever como " + utilizadorTwitch : " · só a ler (sem login)");
+}
+
+function enviarMensagemChat(texto){
+  if (!ws || ws.readyState !== WebSocket.OPEN || !tokenTwitch || !canalLigado) return;
+  ws.send("PRIVMSG #" + canalLigado + " :" + texto);
 }
 
 function processarLinhaIRC(linha){
@@ -287,9 +401,14 @@ function processarLinhaIRC(linha){
     ws.send("PONG :tmi.twitch.tv");
     return;
   }
-  if (linha.indexOf("JOIN #") > -1 && linha.indexOf("justinfan") > -1){
+  if (linha.indexOf("JOIN #") > -1 && (linha.indexOf("justinfan") > -1 || (utilizadorTwitch && linha.indexOf(":"+utilizadorTwitch) === 0))){
     el("#estado-ligacao").textContent = "Ligado";
     el("#estado-ligacao").className = "estado-ligacao on";
+    return;
+  }
+  if (linha.indexOf("NOTICE") > -1 && linha.toLowerCase().indexOf("login authentication failed") > -1){
+    el("#estado-ligacao").textContent = "Falha no login — token expirado?";
+    el("#estado-ligacao").className = "estado-ligacao off";
     return;
   }
   var m = linha.match(/^:([a-zA-Z0-9_]+)!\S+ PRIVMSG #\S+ :(.*)$/);
@@ -311,4 +430,5 @@ el("#b-ligar").onclick = function(){ ligarTwitch(el("#canal").value); };
 el("#canal").addEventListener("keydown", function(ev){ if (ev.key === "Enter") el("#b-ligar").click(); });
 
 carregarPuzzleDeHoje();
+verificarLoginExistente();
 </script>
