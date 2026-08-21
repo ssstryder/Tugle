@@ -1020,13 +1020,19 @@ async def opcoes_modo() -> dict:
 async def lista_puzzles(limite: int = 90) -> list[dict]:
     async with Sessao() as sessao:
         resultado = await sessao.execute(
-            select(PuzzleGuardado.data).order_by(PuzzleGuardado.data.desc()).limit(limite)
+            select(PuzzleGuardado.data).order_by(PuzzleGuardado.data.desc())
         )
         datas = [r[0] for r in resultado.all()]
-    return [
-        {"data": d, "nome": f"Tugle de {dt.date.fromisoformat(d).strftime('%d/%m/%Y')}"}
-        for d in datas
-    ]
+    itens = []
+    for d in datas:
+        try:
+            data_obj = dt.date.fromisoformat(d)
+        except ValueError:
+            continue  # id de um modo (ex.: "2026-08-21--nacional--1990") — não é um dia de calendário, não entra no Arquivo
+        itens.append({"data": d, "nome": f"Tugle de {data_obj.strftime('%d/%m/%Y')}"})
+        if len(itens) >= limite:
+            break
+    return itens
 
 
 @app.get("/puzzle/{data}")
