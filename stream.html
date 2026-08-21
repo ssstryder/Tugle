@@ -1,0 +1,314 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tugle — Stream</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --osso:#F4F1EA; --carvao:#17140F; --acento:#B8461F;
+    --tinta-rgb:23,20,15;
+    --linha:rgba(23,20,15,.15); --linha-forte:rgba(23,20,15,.38);
+    --serif:"Instrument Serif", Georgia, serif;
+    --sans:"Inter", system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--osso);color:var(--carvao);font-family:var(--sans)}
+  body{min-height:100vh;padding:28px 24px}
+  .app{max-width:1080px;margin:0 auto}
+
+  .cabecalho{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:24px}
+  .logo{font-family:var(--serif);font-size:30px}
+  .logo i{color:var(--acento);font-style:italic}
+  .sub{font:500 12px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.45)}
+
+  .ligacao{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:16px 0;border-bottom:1px solid var(--linha);margin-bottom:24px}
+  input[type="text"]{font:500 15px/1 var(--sans);padding:11px 14px;border:1px solid var(--linha-forte);
+    background:var(--osso);color:var(--carvao);border-radius:4px;min-width:220px}
+  input[type="text"]:focus{outline:2px solid var(--acento);outline-offset:1px}
+  .btn{appearance:none;border:1px solid var(--linha-forte);background:none;color:var(--carvao);
+    font:600 13px/1 var(--sans);padding:10px 16px;border-radius:4px;cursor:pointer}
+  .btn:hover{background:rgba(var(--tinta-rgb),.06)}
+  .btn.primario{background:var(--carvao);color:var(--osso);border-color:var(--carvao)}
+  .btn.primario:hover{opacity:.88}
+  .btn.suave{opacity:.75}
+  .btn:disabled{opacity:.4;cursor:default}
+  .estado-ligacao{font:600 12px/1 var(--sans);padding:6px 10px;border-radius:20px}
+  .estado-ligacao.on{color:#3E7A4E;background:rgba(62,122,78,.12)}
+  .estado-ligacao.off{color:rgba(var(--tinta-rgb),.4);background:rgba(var(--tinta-rgb),.06)}
+
+  .zona{display:grid;grid-template-columns:1fr 300px;gap:32px}
+  @media (max-width:760px){.zona{grid-template-columns:1fr}}
+
+  .jogo{border:1px solid var(--linha);border-radius:6px;padding:32px;text-align:center}
+  .progresso{font:600 12px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--acento);margin-bottom:20px}
+
+  .disco{width:120px;height:120px;border-radius:50%;margin:0 auto 24px;cursor:pointer;position:relative;
+    background:repeating-radial-gradient(circle at center,#17140F 0px,#17140F 1px,#2b2620 1px,#2b2620 2.6px);
+    display:flex;align-items:center;justify-content:center;transition:transform .15s}
+  .disco:hover{transform:scale(1.05)}
+  .disco:active{transform:scale(.97)}
+  .disco.girar{animation:girar 2.2s linear infinite}
+  @keyframes girar{to{transform:rotate(360deg)}}
+  .disco-centro{width:44px;height:44px;border-radius:50%;background:var(--acento);
+    display:flex;align-items:center;justify-content:center}
+  .disco-icone{color:var(--osso);font-size:16px}
+
+  .pista{font:400 22px/1.4 var(--serif);max-width:520px;margin:0 auto 8px}
+  .meta-pista{font:500 12px/1 var(--sans);color:rgba(var(--tinta-rgb),.4);margin-bottom:24px}
+
+  .resposta-revelada{font:500 15px/1 var(--sans);padding:10px 16px;border-radius:4px;margin-bottom:20px;display:inline-block}
+  .resposta-revelada.certa{background:rgba(62,122,78,.12);color:#3E7A4E}
+  .resposta-revelada.saltada{background:rgba(var(--tinta-rgb),.06);color:rgba(var(--tinta-rgb),.55)}
+
+  .controlos{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+
+  .placar{border:1px solid var(--linha);border-radius:6px;padding:20px;height:fit-content}
+  .placar h2{font-family:var(--serif);font-weight:400;font-size:20px;margin:0 0 4px}
+  .placar .aviso{font-size:12px;color:rgba(var(--tinta-rgb),.45);margin-bottom:16px}
+  .placar ol{list-style:none;margin:0;padding:0}
+  .placar li{display:flex;justify-content:space-between;align-items:baseline;
+    padding:9px 0;border-bottom:1px solid var(--linha);font-size:14px}
+  .placar li:last-child{border-bottom:0}
+  .placar .pos{color:rgba(var(--tinta-rgb),.35);font:600 11px/1 var(--sans);width:20px;flex:none}
+  .placar .nome{flex:1;font-weight:500}
+  .placar .pontos{font:700 14px/1 var(--sans);color:var(--acento)}
+  .placar .vazio{font-size:13px;color:rgba(var(--tinta-rgb),.4);padding:12px 0}
+
+  .canal-atual{font-size:12px;color:rgba(var(--tinta-rgb),.45)}
+  .canal-atual b{color:var(--carvao)}
+</style>
+
+<div class="app">
+  <header class="cabecalho">
+    <div class="logo">Tug<i>le</i> <span class="sub" style="margin-left:8px">stream</span></div>
+    <div class="sub" id="etiqueta-dia"></div>
+  </header>
+
+  <div class="ligacao">
+    <input type="text" id="canal" placeholder="nome do canal na Twitch (ex.: sstryder)">
+    <button class="btn primario" id="b-ligar">Ligar ao chat</button>
+    <span class="estado-ligacao off" id="estado-ligacao">Desligado</span>
+    <span class="canal-atual" id="canal-atual"></span>
+  </div>
+
+  <div class="zona">
+    <div class="jogo">
+      <div class="progresso" id="progresso">A carregar o puzzle de hoje…</div>
+      <div class="disco" id="disco">
+        <div class="disco-centro"><span class="disco-icone" id="disco-icone">▶</span></div>
+      </div>
+      <audio id="som" preload="none"></audio>
+      <div class="pista" id="pista">—</div>
+      <div class="meta-pista" id="meta-pista"></div>
+      <div id="zona-resposta"></div>
+      <div class="controlos">
+        <button class="btn" id="b-saltar">Saltar palavra</button>
+        <button class="btn" id="b-revelar">Revelar resposta</button>
+        <button class="btn primario" id="b-proxima" style="display:none">Próxima palavra</button>
+      </div>
+    </div>
+
+    <aside class="placar">
+      <h2>Placar</h2>
+      <div class="aviso">Quem acertar primeiro no chat ganha o ponto.</div>
+      <ol id="lista-placar"></ol>
+      <div class="vazio" id="placar-vazio">Ainda ninguém pontuou.</div>
+      <button class="btn suave" id="b-reiniciar-placar" style="margin-top:14px;width:100%">Reiniciar placar</button>
+    </aside>
+  </div>
+</div>
+
+<script>
+function el(s){ return document.querySelector(s); }
+function normalizar(t){
+  return (t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+}
+function criar(tag,cls,txt){ var e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; }
+
+var entradas = [], indiceAtual = -1, respondida = false;
+var placar = {};
+
+async function carregarPuzzleDeHoje(){
+  try {
+    var r = await fetch("/puzzle/hoje");
+    if (!r.ok) throw new Error("estado "+r.status);
+    var p = await r.json();
+    el("#etiqueta-dia").textContent = p.nome || "";
+    entradas = p.entradas.slice();
+    for (var i = entradas.length - 1; i > 0; i--){
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = entradas[i]; entradas[i] = entradas[j]; entradas[j] = tmp;
+    }
+    indiceAtual = -1;
+    proximaPalavra();
+  } catch(e){
+    el("#progresso").textContent = "Não consegui ir buscar o puzzle de hoje.";
+  }
+}
+
+function entradaAtual(){ return entradas[indiceAtual]; }
+
+function proximaPalavra(){
+  indiceAtual++;
+  respondida = false;
+  el("#zona-resposta").innerHTML = "";
+  el("#b-proxima").style.display = "none";
+  el("#b-saltar").disabled = false;
+  el("#b-revelar").disabled = false;
+  pararSom();
+
+  if (indiceAtual >= entradas.length){
+    el("#progresso").textContent = "Puzzle de hoje esgotado — recarrega a página para outra ronda.";
+    el("#pista").textContent = "Já passámos por todas as palavras de hoje.";
+    el("#meta-pista").textContent = "";
+    return;
+  }
+  var e = entradaAtual();
+  el("#progresso").textContent = "Palavra " + (indiceAtual+1) + " de " + entradas.length;
+  el("#pista").textContent = e.pista;
+  el("#meta-pista").textContent = normalizar(e.resposta).length + " letras";
+}
+
+function pararSom(){
+  var som = el("#som");
+  som.pause(); som.currentTime = 0;
+  el("#disco").classList.remove("girar");
+  el("#disco-icone").textContent = "▶";
+}
+
+el("#disco").onclick = function(){
+  var e = entradaAtual();
+  if (!e) return;
+  var som = el("#som");
+  if (!som.paused){ pararSom(); return; }
+  som.src = e.audio;
+  som.onloadedmetadata = function(){
+    som.currentTime = e.inicio || 6;
+    som.play();
+    el("#disco").classList.add("girar");
+    el("#disco-icone").textContent = "\u275a\u275a";
+    setTimeout(function(){ if (!som.paused) pararSom(); }, (e.dur || 8) * 1000);
+  };
+  som.load();
+};
+el("#som").onended = pararSom;
+
+function acertou(utilizador){
+  if (respondida || indiceAtual >= entradas.length) return;
+  respondida = true;
+  var e = entradaAtual();
+  pararSom();
+  placar[utilizador] = (placar[utilizador] || 0) + 1;
+  desenharPlacar();
+  el("#zona-resposta").innerHTML =
+    '<div class="resposta-revelada certa">\ud83c\udf89 ' + utilizador + ' acertou \u2014 ' + e.resposta + '</div>';
+  el("#b-saltar").disabled = true;
+  el("#b-revelar").disabled = true;
+  el("#b-proxima").style.display = "inline-block";
+}
+
+el("#b-saltar").onclick = function(){
+  if (respondida || indiceAtual >= entradas.length) return;
+  respondida = true;
+  pararSom();
+  el("#zona-resposta").innerHTML = '<div class="resposta-revelada saltada">Saltada \u2014 ' + entradaAtual().resposta + '</div>';
+  el("#b-saltar").disabled = true;
+  el("#b-revelar").disabled = true;
+  el("#b-proxima").style.display = "inline-block";
+};
+el("#b-revelar").onclick = function(){
+  if (respondida || indiceAtual >= entradas.length) return;
+  respondida = true;
+  pararSom();
+  el("#zona-resposta").innerHTML = '<div class="resposta-revelada saltada">Resposta: ' + entradaAtual().resposta + '</div>';
+  el("#b-saltar").disabled = true;
+  el("#b-revelar").disabled = true;
+  el("#b-proxima").style.display = "inline-block";
+};
+el("#b-proxima").onclick = proximaPalavra;
+
+function desenharPlacar(){
+  var lista = el("#lista-placar");
+  var nomes = Object.keys(placar).sort(function(a,b){ return placar[b]-placar[a]; });
+  lista.innerHTML = "";
+  el("#placar-vazio").style.display = nomes.length ? "none" : "block";
+  nomes.forEach(function(nome, i){
+    var li = criar("li");
+    li.appendChild(criar("span","pos", (i+1)+"."));
+    li.appendChild(criar("span","nome", nome));
+    li.appendChild(criar("span","pontos", placar[nome]));
+    lista.appendChild(li);
+  });
+}
+el("#b-reiniciar-placar").onclick = function(){
+  if (!confirm("Repor o placar a zeros?")) return;
+  placar = {};
+  desenharPlacar();
+};
+
+var ws = null;
+
+function ligarTwitch(canal){
+  canal = canal.trim().toLowerCase().replace(/^#/, "");
+  if (!canal) return;
+  if (ws){ try { ws.close(); } catch(e){} }
+
+  el("#estado-ligacao").textContent = "A ligar\u2026";
+  el("#estado-ligacao").className = "estado-ligacao off";
+
+  ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+  ws.onopen = function(){
+    ws.send("PASS SCHMOOPIIE");
+    ws.send("NICK justinfan" + Math.floor(10000 + Math.random()*89999));
+    ws.send("JOIN #" + canal);
+  };
+  ws.onmessage = function(ev){
+    String(ev.data).split("\r\n").forEach(processarLinhaIRC);
+  };
+  ws.onclose = function(){
+    el("#estado-ligacao").textContent = "Desligado";
+    el("#estado-ligacao").className = "estado-ligacao off";
+  };
+  ws.onerror = function(){
+    el("#estado-ligacao").textContent = "Erro na liga\u00e7\u00e3o";
+    el("#estado-ligacao").className = "estado-ligacao off";
+  };
+
+  el("#canal-atual").innerHTML = "Canal: <b>#" + canal + "</b>";
+}
+
+function processarLinhaIRC(linha){
+  if (!linha) return;
+  if (linha.indexOf("PING") === 0){
+    ws.send("PONG :tmi.twitch.tv");
+    return;
+  }
+  if (linha.indexOf("JOIN #") > -1 && linha.indexOf("justinfan") > -1){
+    el("#estado-ligacao").textContent = "Ligado";
+    el("#estado-ligacao").className = "estado-ligacao on";
+    return;
+  }
+  var m = linha.match(/^:([a-zA-Z0-9_]+)!\S+ PRIVMSG #\S+ :(.*)$/);
+  if (!m) return;
+  var utilizador = m[1], mensagem = m[2];
+  processarMensagemChat(utilizador, mensagem);
+}
+
+function processarMensagemChat(utilizador, mensagem){
+  if (respondida || indiceAtual >= entradas.length || indiceAtual < 0) return;
+  var e = entradaAtual();
+  if (!e) return;
+  if (normalizar(mensagem) === normalizar(e.resposta)){
+    acertou(utilizador);
+  }
+}
+
+el("#b-ligar").onclick = function(){ ligarTwitch(el("#canal").value); };
+el("#canal").addEventListener("keydown", function(ev){ if (ev.key === "Enter") el("#b-ligar").click(); });
+
+carregarPuzzleDeHoje();
+</script>

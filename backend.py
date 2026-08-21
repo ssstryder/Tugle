@@ -712,6 +712,7 @@ async def obter_bytes_faixa(entrada_id: str, url: str) -> bytes:
 PASTA = Path(__file__).parent
 FICHEIRO_FRONTEND = PASTA / "tugle.html"
 FICHEIRO_INICIO = PASTA / "inicio.html"
+FICHEIRO_STREAM = PASTA / "stream.html"
 FICHEIRO_FAVICON = PASTA / "favicon.svg"
 FICHEIRO_OG_IMAGE = PASTA / "og-image.png"
 FICHEIRO_ROBOTS = PASTA / "robots.txt"
@@ -732,6 +733,15 @@ async def pagina_jogo():
     if FICHEIRO_FRONTEND.exists():
         return FileResponse(FICHEIRO_FRONTEND, media_type="text/html")
     return {"aviso": "coloca o tugle.html na mesma pasta do backend.py"}
+
+
+@app.get("/stream", include_in_schema=False)
+async def pagina_stream():
+    """Versão para jogar em direto na Twitch: uma palavra de cada vez,
+    com deteção de acertos no chat."""
+    if FICHEIRO_STREAM.exists():
+        return FileResponse(FICHEIRO_STREAM, media_type="text/html")
+    return {"aviso": "coloca o stream.html na mesma pasta do backend.py"}
 
 
 @app.get("/favicon.svg", include_in_schema=False)
