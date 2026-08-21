@@ -22,7 +22,9 @@ import datetime as dt
 import os
 import random
 import re
+import time
 import unicodedata
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -32,7 +34,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import Integer, String, select
@@ -121,15 +123,41 @@ def tema_do_dia(data: dt.date) -> tuple[str, set[str]] | None:
 CHAVE_ADMIN = os.environ.get("ADMIN_KEY", "")
 
 
-async def exigir_chave_admin(chave: str | None = None) -> None:
+async def exigir_chave_admin(x_admin_key: str | None = Header(None)) -> None:
     """Protege endpoints que alteram ou apagam dados (regenerar puzzle,
     limpar catálogo). Sem ADMIN_KEY configurada no servidor, estas rotas
-    ficam sempre fechadas — falha em segurança, não em conveniência."""
+    ficam sempre fechadas — falha em segurança, não em conveniência.
+    A chave vai num cabeçalho (X-Admin-Key), não no URL — assim não fica
+    gravada no histórico do browser nem nos logs de acesso do servidor."""
     if not CHAVE_ADMIN:
         raise HTTPException(500, "ADMIN_KEY não está configurada no servidor.")
-    if chave != CHAVE_ADMIN:
-        raise HTTPException(401, "Chave de administração inválida ou em falta.")
+    if x_admin_key != CHAVE_ADMIN:
+        raise HTTPException(401, "Chave de administração inválida ou em falta (cabeçalho X-Admin-Key).")
 ENTRADAS_POR_PUZZLE = 16
+
+
+_PEDIDOS_POR_CHAVE: dict[str, list[float]] = defaultdict(list)
+
+
+def limite_excedido(chave: str, maximo: int, janela_segundos: int) -> bool:
+    """Sim/não: esta chave (ex.: 'personalizado:1.2.3.4') já fez pedidos
+    a mais dentro da janela de tempo. Guarda tudo em memória — chega bem
+    para um único processo como este; não sobrevive a reinícios, o que é
+    aceitável para um limitador de abuso, não para nada crítico."""
+    agora = time.time()
+    historico = _PEDIDOS_POR_CHAVE[chave]
+    while historico and historico[0] < agora - janela_segundos:
+        historico.pop(0)
+    if len(historico) >= maximo:
+        return True
+    historico.append(agora)
+    return False
+
+
+async def limitar_puzzle_personalizado(request: Request) -> None:
+    ip = request.client.host if request.client else "desconhecido"
+    if limite_excedido(f"personalizado:{ip}", maximo=10, janela_segundos=60):
+        raise HTTPException(429, "Demasiados pedidos deste modo em pouco tempo. Espera um minuto e tenta outra vez.")
 # A Deezer recorta os 30s de antevisão a começar algures na música, muitas
 # vezes ainda em desvanecimento/intro. Saltar uns segundos costuma aproximar
 # do refrão — não há forma de o garantir sem analisar o áudio a sério.
@@ -792,6 +820,15 @@ app.add_middleware(
     allow_methods=["GET", "POST"], allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def cabecalhos_seguranca(request: Request, chamar_seguinte):
+    resposta = await chamar_seguinte(request)
+    resposta.headers["X-Content-Type-Options"] = "nosniff"
+    resposta.headers["X-Frame-Options"] = "DENY"
+    resposta.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return resposta
+
 FaixasEmMemoria: dict[str, bytes] = {}
 
 
@@ -907,7 +944,8 @@ async def puzzle_hoje() -> dict:
 
 @app.get("/puzzle/personalizado")
 async def puzzle_personalizado(
-    origem: str = "todos", genero: str | None = None, decada: int | None = None
+    origem: str = "todos", genero: str | None = None, decada: int | None = None,
+    _: None = Depends(limitar_puzzle_personalizado),
 ) -> dict:
     if origem not in ("todos", "nacional", "internacional"):
         raise HTTPException(400, "origem tem de ser 'todos', 'nacional' ou 'internacional'")
