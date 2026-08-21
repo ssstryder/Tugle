@@ -101,15 +101,32 @@
   .aba-borda:hover{padding-left:12px;color:var(--acento)}
   .aba-borda.escondida{opacity:0;pointer-events:none}
 
-  .grupo-modo{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-  .btn-opcao{appearance:none;border:1px solid var(--linha-forte);background:none;
-    color:var(--carvao);font:500 13px/1 var(--sans);padding:8px 12px;border-radius:20px;
-    cursor:pointer;transition:background .12s,border-color .12s,color .12s}
-  .btn-opcao:hover{border-color:var(--carvao)}
-  .btn-opcao.ativo{background:var(--carvao);color:var(--osso);border-color:var(--carvao)}
   .rotulo-modo{font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;
-    color:rgba(var(--tinta-rgb),.5);display:block;margin-top:18px}
+    color:rgba(var(--tinta-rgb),.5);display:block;margin-top:22px}
   .rotulo-modo:first-of-type{margin-top:0}
+
+  .segmentado-modo{display:flex;border:1px solid var(--carvao);border-radius:20px;
+    overflow:hidden;margin-top:8px}
+  .segmentado-modo .seg-item{flex:1;appearance:none;border:0;background:none;
+    padding:9px 0;font:500 13px/1 var(--sans);cursor:pointer;color:var(--carvao);
+    transition:background .12s,color .12s}
+  .segmentado-modo .seg-item+.seg-item{border-left:1px solid var(--carvao)}
+  .segmentado-modo .seg-item.ativo{background:var(--carvao);color:var(--osso)}
+
+  .decadas-modo{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;margin-top:10px}
+  .decadas-modo .decada-item{font-family:var(--serif);font-size:28px;line-height:1;
+    cursor:pointer;color:rgba(var(--tinta-rgb),.28);transition:color .15s;background:none;
+    border:0;padding:0;appearance:none}
+  .decadas-modo .decada-item.ativo{color:var(--acento)}
+
+  .generos-modo{font-family:var(--serif);font-style:italic;font-size:18px;line-height:1.7;
+    margin-top:8px}
+  .generos-modo .genero-item{cursor:pointer;color:rgba(var(--tinta-rgb),.35);
+    border-bottom:1px solid transparent;background:none;border-top:0;border-left:0;
+    border-right:0;padding:0;appearance:none;font:inherit}
+  .generos-modo .genero-item.ativo{color:var(--carvao);border-bottom-color:var(--acento)}
+  .generos-modo .genero-item:not(:last-child)::after{
+    content:" · ";color:rgba(var(--tinta-rgb),.25);font-style:normal}
   .lateral-cabecalho{display:flex;justify-content:space-between;align-items:baseline;
     margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--linha)}
   .lateral-cabecalho h2{font-family:var(--serif);font-weight:400;font-size:26px;margin:0}
@@ -494,23 +511,23 @@
     quantas vezes quiseres, com os filtros que escolheres.
   </p>
   <span class="rotulo-modo">Origem</span>
-  <div class="grupo-modo" id="botoes-origem" data-tipo="origem">
-    <button class="btn-opcao ativo" data-valor="todos">Todos</button>
-    <button class="btn-opcao" data-valor="nacional">Nacional</button>
-    <button class="btn-opcao" data-valor="internacional">Internacional</button>
-  </div>
-
-  <span class="rotulo-modo">Género</span>
-  <div class="grupo-modo" id="botoes-genero" data-tipo="genero">
-    <button class="btn-opcao ativo" data-valor="">Qualquer</button>
+  <div class="segmentado-modo" id="botoes-origem" data-tipo="origem">
+    <button class="seg-item ativo" data-valor="todos">Todos</button>
+    <button class="seg-item" data-valor="nacional">Nacional</button>
+    <button class="seg-item" data-valor="internacional">Internacional</button>
   </div>
 
   <span class="rotulo-modo">Década</span>
-  <div class="grupo-modo" id="botoes-decada" data-tipo="decada">
-    <button class="btn-opcao ativo" data-valor="">Qualquer</button>
+  <div class="decadas-modo" id="botoes-decada" data-tipo="decada">
+    <button class="decada-item ativo" data-valor="">Todas</button>
   </div>
 
-  <button class="btn primario" id="b-jogar-modo" style="width:100%;margin-top:22px">Jogar este modo</button>
+  <span class="rotulo-modo">Género</span>
+  <div class="generos-modo" id="botoes-genero" data-tipo="genero">
+    <button class="genero-item ativo" data-valor="">Qualquer</button>
+  </div>
+
+  <button class="btn primario" id="b-jogar-modo" style="width:100%;margin-top:26px">Jogar este modo</button>
   <div id="estado-modos" style="margin-top:12px"></div>
 </aside>
 
@@ -1294,13 +1311,13 @@ var escolhaModo = { origem: "todos", genero: "", decada: "" };
 var opcoesModoCarregadas = false;
 
 function selecionarBotaoModo(grupo, valor){
-  grupo.querySelectorAll(".btn-opcao").forEach(function(b){
+  grupo.querySelectorAll("[data-valor]").forEach(function(b){
     b.classList.toggle("ativo", b.dataset.valor === valor);
   });
 }
 function ligarGrupoModo(grupo){
   grupo.addEventListener("click", function(ev){
-    var b = ev.target.closest(".btn-opcao");
+    var b = ev.target.closest("[data-valor]");
     if (!b) return;
     escolhaModo[grupo.dataset.tipo] = b.dataset.valor;
     selecionarBotaoModo(grupo, b.dataset.valor);
@@ -1316,10 +1333,10 @@ async function carregarOpcoesModo(){
     var d = await r.json();
     var grupoGenero = el("#botoes-genero"), grupoDecada = el("#botoes-decada");
     (d.generos || []).forEach(function(g){
-      var b = criar("button","btn-opcao",g); b.dataset.valor = g; grupoGenero.appendChild(b);
+      var b = criar("button","genero-item",g); b.dataset.valor = g; grupoGenero.appendChild(b);
     });
     (d.decadas || []).forEach(function(dec){
-      var b = criar("button","btn-opcao","Anos "+dec); b.dataset.valor = dec; grupoDecada.appendChild(b);
+      var b = criar("button","decada-item","'"+String(dec).slice(-2)); b.dataset.valor = dec; grupoDecada.appendChild(b);
     });
     opcoesModoCarregadas = true;
   } catch(e){
