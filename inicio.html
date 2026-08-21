@@ -21,23 +21,30 @@
 <style>
   :root{
     --osso:#F4F1EA; --carvao:#17140F; --acento:#B8461F;
+    --tinta-rgb:23,20,15;
     --linha:rgba(23,20,15,.15); --linha-forte:rgba(23,20,15,.38);
     --serif:"Instrument Serif", Georgia, serif;
     --sans:"Inter", system-ui, -apple-system, sans-serif;
   }
+  html[data-tema="escuro"]{
+    --osso:#161310; --carvao:#F1EDE4; --acento:#E2814F;
+    --tinta-rgb:241,237,228;
+    --linha:rgba(241,237,228,.14); --linha-forte:rgba(241,237,228,.3);
+  }
+  html{background:var(--osso)}
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;height:100%}
   body{background:var(--osso);color:var(--carvao);font-family:var(--sans);
-    display:flex;flex-direction:column}
+    display:flex;flex-direction:column;transition:background .15s,color .15s}
   .pagina{max-width:640px;margin:0 auto;padding:0 20px;width:100%;flex:1;
     display:flex;flex-direction:column;justify-content:center}
   .fita{font:600 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;
-    color:rgba(23,20,15,.48);margin-bottom:18px}
+    color:rgba(var(--tinta-rgb),.48);margin-bottom:18px}
   h1{font-family:var(--serif);font-weight:400;font-size:clamp(52px,12vw,104px);
     line-height:.86;margin:0;letter-spacing:-.01em}
   h1 i{font-style:italic;color:var(--acento)}
   .linha{max-width:420px;margin:18px 0 30px;font-size:15px;line-height:1.55;
-    color:rgba(23,20,15,.62)}
+    color:rgba(var(--tinta-rgb),.62)}
   .btn{appearance:none;display:inline-block;cursor:pointer;text-decoration:none;
     font:500 14px/1 var(--sans);padding:14px 28px;border-radius:3px;
     background:var(--carvao);color:var(--osso);border:1px solid var(--carvao);
@@ -46,14 +53,24 @@
   .btn.contorno{background:#9146FF;color:#fff;border-color:#9146FF}
   .btn.contorno:hover{background:#7c3aed;border-color:#7c3aed;color:#fff}
   .botoes{display:flex;gap:10px;flex-wrap:wrap}
-  .nota{margin:16px 0 0;font-size:13px;color:rgba(23,20,15,.5)}
+  .nota{margin:16px 0 0;font-size:13px;color:rgba(var(--tinta-rgb),.5)}
   footer{display:flex;align-items:center;gap:10px;padding:24px 20px;max-width:640px;
     margin:0 auto;width:100%;border-top:1px solid var(--linha);
-    font:500 12px/1 var(--sans);color:rgba(23,20,15,.4)}
+    font:500 12px/1 var(--sans);color:rgba(var(--tinta-rgb),.4)}
   footer a{color:inherit;text-decoration:none}
   footer a:hover{color:var(--carvao)}
-  footer span{color:rgba(23,20,15,.25)}
+  footer span{color:rgba(var(--tinta-rgb),.25)}
 </style>
+
+<script>
+(function(){
+  try {
+    var guardado = localStorage.getItem("tugle:tema");
+    var tema = guardado || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro");
+    if (tema === "escuro") document.documentElement.setAttribute("data-tema", "escuro");
+  } catch(e){}
+})();
+</script>
 
 <div class="pagina">
   <div class="fita">Tugle</div>

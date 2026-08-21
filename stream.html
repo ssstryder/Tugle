@@ -15,6 +15,12 @@
     --serif:"Instrument Serif", Georgia, serif;
     --sans:"Inter", system-ui, -apple-system, sans-serif;
   }
+  html[data-tema="escuro"]{
+    --osso:#161310; --carvao:#F1EDE4; --acento:#E2814F;
+    --tinta-rgb:241,237,228;
+    --linha:rgba(241,237,228,.14); --linha-forte:rgba(241,237,228,.3);
+  }
+  html{background:var(--osso)}
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--osso);color:var(--carvao);font-family:var(--sans)}
   body{min-height:100vh;padding:28px 24px}
@@ -97,6 +103,16 @@
   .aviso-config code{background:rgba(var(--tinta-rgb),.08);padding:1px 5px;border-radius:3px;font-size:12px}
 </style>
 
+<script>
+(function(){
+  try {
+    var guardado = localStorage.getItem("tugle:tema");
+    var tema = guardado || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro");
+    if (tema === "escuro") document.documentElement.setAttribute("data-tema", "escuro");
+  } catch(e){}
+})();
+</script>
+
 <div class="app">
   <header class="cabecalho">
     <a href="/" class="logo" style="text-decoration:none;color:inherit">Tug<i>le</i> <span class="sub" style="margin-left:8px">stream</span></a>
@@ -162,7 +178,7 @@
 
 <script>
 /* ============ configuração — troca pelo teu Client ID da Twitch ============ */
-var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
+var CLIENT_ID = "COLOCA_AQUI_O_TEU_CLIENT_ID";
 
 function el(s){ return document.querySelector(s); }
 function normalizar(t){
