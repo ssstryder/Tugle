@@ -194,17 +194,37 @@ ARTISTAS = [
 
 
 ARTISTAS_INTERNACIONAIS = [
+    # pop / r&b
     "Taylor Swift", "Ed Sheeran", "Adele", "Bruno Mars", "The Weeknd",
-    "Beyoncé", "Drake", "Rihanna", "Coldplay", "Imagine Dragons",
-    "Dua Lipa", "Ariana Grande", "Billie Eilish", "Justin Bieber",
-    "Michael Jackson", "Queen", "The Beatles", "Eminem", "Kendrick Lamar",
-    "Bad Bunny", "Shakira", "Maroon 5", "Katy Perry", "Lady Gaga",
-    "Post Malone", "Harry Styles", "Olivia Rodrigo", "SZA", "Kanye West",
-    "Sia", "Sam Smith", "Ozzy Osbourne", "Metallica", "Linkin Park",
-    "Red Hot Chili Peppers", "Foo Fighters", "Radiohead", "U2",
-    "Elton John", "Whitney Houston", "Stevie Wonder", "Bee Gees",
-    "ABBA", "Daft Punk", "David Bowie", "Prince", "Amy Winehouse",
-    "Rosalía", "J Balvin", "Karol G",
+    "Beyoncé", "Drake", "Rihanna", "Dua Lipa", "Ariana Grande",
+    "Billie Eilish", "Justin Bieber", "Michael Jackson", "Katy Perry",
+    "Lady Gaga", "Post Malone", "Harry Styles", "Olivia Rodrigo", "SZA",
+    "Sia", "Sam Smith", "Mariah Carey", "Celine Dion", "Britney Spears",
+    "Christina Aguilera", "Usher", "Alicia Keys", "John Legend",
+    "Charlie Puth", "Shawn Mendes", "Camila Cabello", "Selena Gomez",
+    "Miley Cyrus", "Doja Cat", "Lizzo", "Chris Brown", "Frank Ocean",
+    "Madonna", "George Michael", "BTS", "Blackpink",
+    # rock
+    "Coldplay", "Imagine Dragons", "Queen", "The Beatles", "Metallica",
+    "Linkin Park", "Red Hot Chili Peppers", "Foo Fighters", "Radiohead",
+    "U2", "Elton John", "David Bowie", "Prince", "Amy Winehouse",
+    "Ozzy Osbourne", "Nirvana", "Guns N' Roses", "AC/DC", "Pink Floyd",
+    "Led Zeppelin", "The Rolling Stones", "Fleetwood Mac", "Green Day",
+    "Arctic Monkeys", "Twenty One Pilots", "Panic! At The Disco",
+    "My Chemical Romance", "Muse", "The Killers", "OneRepublic",
+    # hip-hop / rap
+    "Eminem", "Kendrick Lamar", "Kanye West", "Jay-Z", "Nicki Minaj",
+    "Travis Scott", "Cardi B", "Lil Wayne", "Snoop Dogg", "Dr. Dre",
+    "Tyler, The Creator", "J. Cole", "Future", "Megan Thee Stallion",
+    # latina
+    "Bad Bunny", "Shakira", "Rosalía", "J Balvin", "Karol G", "Maluma",
+    "Daddy Yankee", "Ozuna", "Enrique Iglesias", "Ricky Martin",
+    "Luis Fonsi", "Anitta",
+    # eletrónica
+    "Daft Punk", "Calvin Harris", "David Guetta", "Avicii", "Marshmello",
+    # clássicos
+    "Elvis Presley", "Bob Marley", "Stevie Wonder", "Whitney Houston",
+    "Bee Gees", "ABBA", "Maroon 5",
 ]
 
 
@@ -569,14 +589,23 @@ def candidatos_resposta(faixa: "Faixa") -> list[tuple[str, str]]:
     return candidatos
 
 
-def escolher_entrada(faixa: "Faixa", semente: str) -> tuple[str, str] | None:
+def escolher_entrada(faixa: "Faixa", semente: str, usados: set[str]) -> tuple[str, str] | None:
     """(resposta, pista) escolhidos de forma estável entre as hipóteses
     válidas — ou None se nenhuma hipótese couber na grelha (3 a 14
-    letras)."""
+    letras), ou se todas as hipóteses desta música já tiverem sido usadas
+    por outra entrada deste mesmo puzzle (ex.: duas músicas do mesmo
+    artista, ambas a tentar usar o nome do artista como resposta)."""
     candidatos = candidatos_resposta(faixa)
     if not candidatos:
         return None
-    return random.Random(semente + faixa.id).choice(candidatos)
+    ordem = candidatos[:]
+    random.Random(semente + faixa.id).shuffle(ordem)
+    for resposta, pista in ordem:
+        chave = normalizar(resposta)
+        if chave not in usados:
+            usados.add(chave)
+            return (resposta, pista)
+    return None  # todas as hipóteses desta música já estavam ocupadas
 
     aleatorio = random.Random(semente + faixa.id)
     return aleatorio.choice(modelos)
@@ -626,8 +655,9 @@ async def montar_puzzle(data: dt.date) -> dict:
     candidatas = candidatas[:ENTRADAS_POR_PUZZLE]
 
     entradas = []
+    respostas_usadas: set[str] = set()
     for f in candidatas:
-        escolha = escolher_entrada(f, data.isoformat())
+        escolha = escolher_entrada(f, data.isoformat(), respostas_usadas)
         if not escolha:
             continue
         resposta, pista = escolha
@@ -692,8 +722,9 @@ async def montar_puzzle_modo(data: dt.date, origem: str, decada: int | None) -> 
     candidatas = candidatas[:ENTRADAS_POR_PUZZLE]
 
     entradas = []
+    respostas_usadas: set[str] = set()
     for f in candidatas:
-        escolha = escolher_entrada(f, semente)
+        escolha = escolher_entrada(f, semente, respostas_usadas)
         if not escolha:
             continue
         resposta, pista = escolha
