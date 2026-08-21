@@ -482,43 +482,46 @@ async def garantir_catalogo(minimo: int, limite_por_chamada: int = 25) -> None:
 
 # ---------------------------------------------------------------- montagem do puzzle diário
 
-def escolher_campo_resposta(faixa: "Faixa", semente: str) -> str:
-    """Decide se a resposta desta entrada é o título da música ou o nome
-    do artista — sempre respeitando o limite de 3 a 14 letras da grelha.
-    Se só um dos dois couber, usa esse; se os dois couberem, escolhe ao
-    calhas (de forma estável, por música e por dia)."""
-    titulo_cabe = 3 <= len(normalizar(faixa.titulo)) <= 14
-    artista_cabe = 3 <= len(normalizar(faixa.artista)) <= 14
-    if titulo_cabe and artista_cabe:
-        return random.Random(semente + faixa.id + "campo").choice(["titulo", "artista"])
-    return "artista" if artista_cabe else "titulo"
+def candidatos_resposta(faixa: "Faixa") -> list[tuple[str, str]]:
+    """Todas as hipóteses válidas de resposta para esta música — não só o
+    título ou o artista inteiros, mas também palavras isoladas do título
+    ou do nome do artista, quando há mais que uma palavra. Cada hipótese
+    vem com a pista certa, curta e direta (sem frases compridas)."""
+    titulo = (faixa.titulo or "").strip()
+    artista = (faixa.artista or "").strip()
+    candidatos: list[tuple[str, str]] = []
+
+    def cabe(palavra: str) -> bool:
+        return 3 <= len(normalizar(palavra)) <= 14
+
+    if cabe(titulo):
+        candidatos.append((titulo, "Título da música."))
+    if cabe(artista):
+        candidatos.append((artista, "Nome do artista."))
+
+    palavras_titulo = titulo.split()
+    if len(palavras_titulo) > 1:
+        if cabe(palavras_titulo[0]):
+            candidatos.append((palavras_titulo[0], "Primeira palavra do título."))
+        if palavras_titulo[-1] != palavras_titulo[0] and cabe(palavras_titulo[-1]):
+            candidatos.append((palavras_titulo[-1], "Última palavra do título."))
+
+    palavras_artista = artista.split()
+    if len(palavras_artista) > 1:
+        if cabe(palavras_artista[0]):
+            candidatos.append((palavras_artista[0], "Primeira palavra do nome do artista."))
+
+    return candidatos
 
 
-def pista_para(faixa: "Faixa", semente: str, campo: str) -> str:
-    """Formato único e mecânico — sempre a mesma estrutura, sem variar a
-    frase. Garante na mesma pelo menos um detalhe a mais (ano ou género,
-    quando existem), e nunca entrega a própria resposta: se a resposta
-    for o artista, a pista fala da música (nunca do artista); se for o
-    título, a pista fala do artista."""
-    artista = faixa.artista
-    decada = faixa.decada
-    genero = faixa.genero or None
-    titulo = faixa.titulo
-
-    if campo == "artista":
-        partes = [f"Música “{titulo}”."]
-        if decada:
-            partes.append(f"Da década de {decada}.")
-        if genero:
-            partes.append(f"Género: {genero}.")
-        return " ".join(partes)
-
-    partes = [f"Música de {artista}."]
-    if decada:
-        partes.append(f"Da década de {decada}.")
-    if genero:
-        partes.append(f"Género: {genero}.")
-    return " ".join(partes)
+def escolher_entrada(faixa: "Faixa", semente: str) -> tuple[str, str] | None:
+    """(resposta, pista) escolhidos de forma estável entre as hipóteses
+    válidas — ou None se nenhuma hipótese couber na grelha (3 a 14
+    letras)."""
+    candidatos = candidatos_resposta(faixa)
+    if not candidatos:
+        return None
+    return random.Random(semente + faixa.id).choice(candidatos)
 
     aleatorio = random.Random(semente + faixa.id)
     return aleatorio.choice(modelos)
@@ -536,14 +539,9 @@ async def montar_puzzle(data: dt.date) -> dict:
         )
         candidatas = list(resultado.scalars().all())
 
-    # títulos (ou nomes de artista) muito compridos costumam ser metadados
-    # mal limpos e fazem a grelha esticar-se demais — mas só descarta se
-    # NENHUM dos dois servir de resposta (agora a resposta pode ser
-    # qualquer um dos dois, ver escolher_campo_resposta)
-    candidatas = [
-        f for f in candidatas
-        if 3 <= len(normalizar(f.titulo)) <= 14 or 3 <= len(normalizar(f.artista)) <= 14
-    ]
+    # descarta só se NENHUMA hipótese de resposta servir (título, artista,
+    # ou uma palavra isolada de qualquer um dos dois — ver candidatos_resposta)
+    candidatas = [f for f in candidatas if candidatos_resposta(f)]
 
     # ignora sempre quem já não está na lista ARTISTAS — evita que alguém
     # removido continue a aparecer só porque ficou guardado no catálogo
@@ -574,12 +572,14 @@ async def montar_puzzle(data: dt.date) -> dict:
 
     entradas = []
     for f in candidatas:
-        campo = escolher_campo_resposta(f, data.isoformat())
-        resposta = f.titulo if campo == "titulo" else f.artista
+        escolha = escolher_entrada(f, data.isoformat())
+        if not escolha:
+            continue
+        resposta, pista = escolha
         entradas.append({
             "id": f.id, "resposta": resposta, "titulo": f.titulo, "artista": f.artista,
             "capa": f.capa, "genero": f.genero, "decada": f.decada,
-            "pista": pista_para(f, data.isoformat(), campo), "inicio": INICIO_EXCERTO_SEGUNDOS,
+            "pista": pista, "inicio": INICIO_EXCERTO_SEGUNDOS,
         })
 
     grelha = gerar_grelha(entradas)
@@ -612,10 +612,7 @@ async def montar_puzzle_personalizado(
     async with Sessao() as sessao:
         candidatas = list((await sessao.execute(select(Faixa))).scalars().all())
 
-    candidatas = [
-        f for f in candidatas
-        if 3 <= len(normalizar(f.titulo)) <= 14 or 3 <= len(normalizar(f.artista)) <= 14
-    ]
+    candidatas = [f for f in candidatas if candidatos_resposta(f)]
 
     if origem == "nacional":
         candidatas = [f for f in candidatas if not eh_internacional(f.artista)]
@@ -640,12 +637,14 @@ async def montar_puzzle_personalizado(
 
     entradas = []
     for f in candidatas:
-        campo = escolher_campo_resposta(f, semente)
-        resposta = f.titulo if campo == "titulo" else f.artista
+        escolha = escolher_entrada(f, semente)
+        if not escolha:
+            continue
+        resposta, pista = escolha
         entradas.append({
             "id": f.id, "resposta": resposta, "titulo": f.titulo, "artista": f.artista,
             "capa": f.capa, "genero": f.genero, "decada": f.decada,
-            "pista": pista_para(f, semente, campo), "inicio": INICIO_EXCERTO_SEGUNDOS,
+            "pista": pista, "inicio": INICIO_EXCERTO_SEGUNDOS,
         })
 
     grelha = gerar_grelha(entradas)
