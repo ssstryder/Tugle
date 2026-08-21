@@ -106,7 +106,7 @@
     overflow:hidden;margin-top:8px}
   .segmentado-modo .seg-item{flex:1;appearance:none;border:0;background:none;
     padding:9px 0;font:500 13px/1 var(--sans);cursor:pointer;color:var(--carvao);
-    transition:background .12s,color .12s}
+    text-align:center;transition:background .12s,color .12s}
   .segmentado-modo .seg-item+.seg-item{border-left:1px solid var(--carvao)}
   .segmentado-modo .seg-item.ativo{background:var(--carvao);color:var(--osso)}
 
@@ -1200,11 +1200,15 @@ function deBase64(b){
 el("#b-partilhar").onclick = function(){
   if (!atual) return;
   var url;
+  var partesId = String(atual.id).split("--");
   if (/^\d{4}-\d{2}-\d{2}$/.test(atual.id)){
     // puzzle do dia — já existe no servidor, só precisa da data
     url = location.origin + location.pathname + "#d=" + atual.id;
+  } else if (partesId.length === 3 && /^\d{4}-\d{2}-\d{2}$/.test(partesId[0])){
+    // puzzle de um modo por década — também já existe no servidor
+    url = location.origin + location.pathname + "#modo=" + partesId[1] + "-" + partesId[2];
   } else {
-    // puzzle efémero (ex.: modo personalizado) — não está gravado no
+    // puzzle efémero (modo livre, sem década) — não está gravado no
     // servidor, por isso tem de viajar inteiro; tira a capa (o campo
     // mais pesado) para encurtar o máximo possível
     var leve = JSON.parse(JSON.stringify(atual));
@@ -1387,6 +1391,9 @@ async function jogarModoEscolhido(){
     p.entradas.forEach(function(e){ if (e.audio && e.audio.indexOf("http")!==0) e.audio = base + e.audio; });
     caixa.innerHTML = "";
     fecharMenuModos();
+    if (escolhaModo.decada){
+      history.pushState(null, "", location.pathname + "#modo=" + escolhaModo.origem + "-" + escolhaModo.decada);
+    }
     await carregar(p);
     irPara("jogar");
   } catch(e){
@@ -1579,6 +1586,14 @@ el("#cortina-boas-vindas").onclick = function(){ el("#b-fechar-boas-vindas").cli
     try {
       var r = await fetch(baseURL() + "/puzzle/" + dataPartilhada);
       if (r.ok){ puzzleDoLinkPartilhado = await r.json(); }
+    } catch(e){}
+  } else if (location.hash.indexOf("#modo=")===0){
+    var partesModo = location.hash.slice(6).split("-");
+    var origemModo = partesModo[0], decadaModo = partesModo[1];
+    try {
+      var paramsModo = new URLSearchParams({ origem: origemModo || "todos" });
+      var rModo = await fetch(baseURL() + "/puzzle/hoje/decada/" + decadaModo + "?" + paramsModo.toString());
+      if (rModo.ok){ puzzleDoLinkPartilhado = await rModo.json(); }
     } catch(e){}
   } else if (location.hash.indexOf("#p=")===0){
     try { var d = JSON.parse(deBase64(location.hash.slice(3))); d.id = d.id||id(); puzzles.unshift(d); } catch(e){}
