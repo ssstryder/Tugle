@@ -3,7 +3,7 @@
    CONFIGURAÇÃO — troca pelo teu Client ID da Twitch
    (vê dev.twitch.tv/console/apps para criares o teu)
    ============================================================ */
-var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
+var CLIENT_ID = "COLOCA_AQUI_O_TEU_CLIENT_ID";
 </script>
 
 <meta charset="utf-8">
@@ -140,6 +140,30 @@ var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
     font:500 12px/1 var(--sans);cursor:pointer;color:var(--carvao)}
   .segmentado-stream button+button{border-left:1px solid var(--linha-forte)}
   .segmentado-stream button.ativo{background:var(--carvao);color:var(--osso)}
+
+  .tela-configuracao{border:1px solid var(--linha);border-radius:6px;padding:32px;
+    max-width:520px;margin:0 auto}
+  .tela-configuracao h2{font-family:var(--serif);font-weight:400;font-size:26px;margin:0 0 4px}
+  .tela-configuracao .sub-config{font-size:13px;color:rgba(var(--tinta-rgb),.55);margin:0 0 22px}
+  .tela-configuracao .modo-stream{border-bottom:0;margin-bottom:0;padding-bottom:0;
+    flex-direction:column;align-items:stretch;gap:16px}
+  .tela-configuracao .linha-config{display:flex;justify-content:space-between;align-items:center}
+  .tela-configuracao select{padding:8px 10px;border:1px solid var(--linha-forte);border-radius:4px;
+    background:var(--osso);color:var(--carvao);font:500 13px/1 var(--sans)}
+  .b-comecar{width:100%;margin-top:26px;padding:16px;font-size:16px;border-radius:6px}
+
+  .b-reconfigurar{appearance:none;border:1px solid var(--linha-forte);background:none;
+    color:rgba(var(--tinta-rgb),.55);font:500 11px/1 var(--sans);padding:6px 10px;
+    border-radius:14px;cursor:pointer}
+  .b-reconfigurar:hover{color:var(--carvao);border-color:var(--carvao)}
+
+  .tela-countdown{position:fixed;inset:0;z-index:90;background:var(--osso);
+    display:flex;align-items:center;justify-content:center}
+  .tela-countdown .numero{font-family:var(--serif);font-size:180px;line-height:1;color:var(--acento);
+    animation:pulsar-countdown .8s ease}
+  @keyframes pulsar-countdown{0%{opacity:0;transform:scale(.6)}30%{opacity:1;transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+
+  .temporizador-visual{font:700 13px/1 var(--sans);color:var(--acento);margin-left:8px}
 </style>
 
 <script>
@@ -165,26 +189,11 @@ var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
 <div class="app">
   <header class="cabecalho">
     <a href="/" class="logo" style="text-decoration:none;color:inherit">Tug<i>le</i> <span class="sub" style="margin-left:8px">stream</span></a>
-    <div class="sub" id="etiqueta-dia"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="sub" id="etiqueta-dia"></div>
+      <button class="b-reconfigurar" id="b-reconfigurar" style="display:none">Configurar novo jogo</button>
+    </div>
   </header>
-
-  <div class="modo-stream">
-    <span class="rotulo-mini">Origem</span>
-    <div class="segmentado-stream" id="stream-origem">
-      <button class="ativo" data-valor="todos">Todos</button>
-      <button data-valor="nacional">Nacional</button>
-      <button data-valor="internacional">Internacional</button>
-    </div>
-    <span class="rotulo-mini">Década</span>
-    <div class="segmentado-stream" id="stream-decada">
-      <button class="ativo" data-valor="todas">Todas</button>
-    </div>
-    <span class="rotulo-mini">Músicas</span>
-    <input type="number" id="stream-quantidade" min="10" max="30" value="16" style="width:56px;
-      padding:6px 8px;border:1px solid var(--linha-forte);border-radius:4px;background:var(--osso);
-      color:var(--carvao);font:500 12px/1 var(--sans)">
-    <button class="btn primario" id="b-novo-jogo">Novo jogo</button>
-  </div>
 
   <div id="aviso-sem-client-id" class="aviso-config" style="display:none">
     Ainda não configuraste o <code>CLIENT_ID</code> da Twitch neste ficheiro — sem isso só dá para ligar em modo
@@ -195,10 +204,6 @@ var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
     <button class="btn roxo" id="b-login-twitch">Entrar com a Twitch</button>
     <span class="quem" id="quem-esta-ligado" style="display:none"></span>
     <button class="btn suave" id="b-logout" style="display:none">Sair</button>
-    <label class="opcao">
-      <input type="checkbox" id="anunciar-no-chat" checked>
-      Anunciar acertos no chat (precisa de login)
-    </label>
   </div>
 
   <div class="ligacao">
@@ -208,9 +213,56 @@ var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
     <span class="canal-atual" id="canal-atual"></span>
   </div>
 
-  <div class="zona">
+  <div class="tela-configuracao" id="tela-configuracao">
+    <h2>Configurar o jogo</h2>
+    <p class="sub-config">Escolhe as opções e liga o chat acima antes de começares.</p>
+
+    <div class="modo-stream">
+      <div class="linha-config">
+        <span class="rotulo-mini">Origem</span>
+        <div class="segmentado-stream" id="stream-origem">
+          <button class="ativo" data-valor="todos">Todos</button>
+          <button data-valor="nacional">Nacional</button>
+          <button data-valor="internacional">Internacional</button>
+        </div>
+      </div>
+      <div class="linha-config">
+        <span class="rotulo-mini">Década</span>
+        <div class="segmentado-stream" id="stream-decada">
+          <button class="ativo" data-valor="todas">Todas</button>
+        </div>
+      </div>
+      <div class="linha-config">
+        <span class="rotulo-mini">Músicas</span>
+        <select id="stream-quantidade">
+          <option value="15">15</option>
+          <option value="20" selected>20</option>
+          <option value="25">25</option>
+          <option value="30">30</option>
+        </select>
+      </div>
+      <div class="linha-config">
+        <span class="rotulo-mini">Temporizador</span>
+        <select id="stream-temporizador">
+          <option value="0">Sem limite</option>
+          <option value="15">15 segundos</option>
+          <option value="20">20 segundos</option>
+          <option value="30" selected>30 segundos</option>
+          <option value="45">45 segundos</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn primario b-comecar" id="b-comecar-jogo">Jogar</button>
+  </div>
+
+  <div class="tela-countdown" id="tela-countdown" style="display:none">
+    <div class="numero" id="numero-countdown">3</div>
+  </div>
+
+  <div class="zona" id="zona-jogo" style="display:none">
     <div class="jogo">
-      <div class="progresso" id="progresso">A carregar o puzzle de hoje…</div>
+      <div class="progresso" id="progresso">A carregar o puzzle de hoje…<span class="temporizador-visual" id="temporizador-visual"></span></div>
       <div class="disco" id="disco">
         <div class="disco-centro"><span class="disco-icone" id="disco-icone">▶</span></div>
       </div>
@@ -264,10 +316,9 @@ var modoStream = { origem: "todos", decada: "todas" };
 
 async function novoJogo(){
   el("#progresso").textContent = "A montar um jogo novo…";
-  el("#b-novo-jogo").disabled = true;
+  el("#temporizador-visual").textContent = "";
   try {
-    var quantidade = Math.max(10, Math.min(30, parseInt(el("#stream-quantidade").value, 10) || 16));
-    el("#stream-quantidade").value = quantidade;
+    var quantidade = parseInt(el("#stream-quantidade").value, 10) || 20;
     var params = new URLSearchParams({ origem: modoStream.origem, quantidade: quantidade });
     if (modoStream.decada && modoStream.decada !== "todas") params.set("decada", modoStream.decada);
     var r = await fetch("/puzzle/stream?" + params.toString());
@@ -289,8 +340,6 @@ async function novoJogo(){
     proximaPalavra();
   } catch(e){
     el("#progresso").textContent = e.message || "Não consegui montar um jogo novo.";
-  } finally {
-    el("#b-novo-jogo").disabled = false;
   }
 }
 
@@ -318,9 +367,69 @@ function ligarSegmentadoStream(id, chave){
 }
 ligarSegmentadoStream("#stream-origem", "origem");
 ligarSegmentadoStream("#stream-decada", "decada");
-el("#b-novo-jogo").onclick = novoJogo;
+
+/* ============ contagem decrescente antes de começar ============ */
+function correrCountdown(callback){
+  var numeros = [3, 2, 1];
+  el("#tela-countdown").style.display = "flex";
+  function passo(i){
+    if (i >= numeros.length){
+      el("#tela-countdown").style.display = "none";
+      callback();
+      return;
+    }
+    var el2 = el("#numero-countdown");
+    el2.textContent = numeros[i];
+    el2.style.animation = "none";
+    void el2.offsetWidth;
+    el2.style.animation = "";
+    setTimeout(function(){ passo(i + 1); }, 800);
+  }
+  passo(0);
+}
+
+el("#b-comecar-jogo").onclick = function(){
+  el("#tela-configuracao").style.display = "none";
+  correrCountdown(function(){
+    el("#zona-jogo").style.display = "";
+    el("#b-reconfigurar").style.display = "inline-block";
+    novoJogo();
+  });
+};
+el("#b-reconfigurar").onclick = function(){
+  pararTemporizador();
+  pararSom();
+  el("#zona-jogo").style.display = "none";
+  el("#b-reconfigurar").style.display = "none";
+  el("#etiqueta-dia").textContent = "";
+  el("#tela-configuracao").style.display = "";
+};
 
 function entradaAtual(){ return entradas[indiceAtual]; }
+
+var temporizadorId = null;
+function pararTemporizador(){
+  if (temporizadorId){ clearInterval(temporizadorId); temporizadorId = null; }
+  var elTemp = el("#temporizador-visual");
+  if (elTemp) elTemp.textContent = "";
+}
+function arrancarTemporizador(){
+  var segundos = parseInt(el("#stream-temporizador").value, 10) || 0;
+  if (!segundos) return; // "Sem limite"
+  var restam = segundos;
+  var elTemp = el("#temporizador-visual");
+  if (elTemp) elTemp.textContent = " · ⏱ " + restam + "s";
+  temporizadorId = setInterval(function(){
+    restam--;
+    if (restam <= 0){
+      pararTemporizador();
+      if (!respondida) el("#b-revelar").click();
+      return;
+    }
+    var e2 = el("#temporizador-visual");
+    if (e2) e2.textContent = " · ⏱ " + restam + "s";
+  }, 1000);
+}
 
 function proximaPalavra(){
   indiceAtual++;
@@ -330,6 +439,7 @@ function proximaPalavra(){
   el("#b-saltar").disabled = false;
   el("#b-revelar").disabled = false;
   pararSom();
+  pararTemporizador();
 
   if (indiceAtual >= entradas.length){
     el("#progresso").textContent = "Puzzle de hoje esgotado — recarrega a página para outra ronda.";
@@ -338,9 +448,10 @@ function proximaPalavra(){
     return;
   }
   var e = entradaAtual();
-  el("#progresso").textContent = "Palavra " + (indiceAtual+1) + " de " + entradas.length;
+  el("#progresso").innerHTML = "Palavra " + (indiceAtual+1) + " de " + entradas.length + '<span class="temporizador-visual" id="temporizador-visual"></span>';
   el("#pista").textContent = e.pista;
   el("#meta-pista").textContent = normalizar(e.resposta).length + " letras";
+  arrancarTemporizador();
 }
 
 function pararSom(){
@@ -382,6 +493,7 @@ el("#volume").addEventListener("input", function(){
 function acertou(utilizador){
   if (respondida || indiceAtual >= entradas.length) return;
   respondida = true;
+  pararTemporizador();
   var e = entradaAtual();
   pararSom();
   placar[utilizador] = (placar[utilizador] || 0) + 1;
@@ -392,14 +504,13 @@ function acertou(utilizador){
   el("#b-revelar").disabled = true;
   el("#b-proxima").style.display = "inline-block";
 
-  if (el("#anunciar-no-chat").checked){
-    enviarMensagemChat("\ud83c\udf89 " + utilizador + " acertou! A resposta era: " + e.resposta);
-  }
+  enviarMensagemChat("\ud83c\udf89 " + utilizador + " acertou! A resposta era: " + e.resposta);
 }
 
 el("#b-saltar").onclick = function(){
   if (respondida || indiceAtual >= entradas.length) return;
   respondida = true;
+  pararTemporizador();
   pararSom();
   el("#zona-resposta").innerHTML = '<div class="resposta-revelada saltada">Saltada \u2014 ' + entradaAtual().resposta + '</div>';
   el("#b-saltar").disabled = true;
@@ -409,15 +520,14 @@ el("#b-saltar").onclick = function(){
 el("#b-revelar").onclick = function(){
   if (respondida || indiceAtual >= entradas.length) return;
   respondida = true;
+  pararTemporizador();
   var e = entradaAtual();
   pararSom();
   el("#zona-resposta").innerHTML = '<div class="resposta-revelada saltada">Resposta: ' + e.resposta + '</div>';
   el("#b-saltar").disabled = true;
   el("#b-revelar").disabled = true;
   el("#b-proxima").style.display = "inline-block";
-  if (el("#anunciar-no-chat").checked){
-    enviarMensagemChat("A resposta era: " + e.resposta + ". Próxima!");
-  }
+  enviarMensagemChat("A resposta era: " + e.resposta + ". Próxima!");
 };
 el("#b-proxima").onclick = proximaPalavra;
 
@@ -587,6 +697,5 @@ el("#b-ligar").onclick = function(){ ligarTwitch(el("#canal").value); };
 el("#canal").addEventListener("keydown", function(ev){ if (ev.key === "Enter") el("#b-ligar").click(); });
 
 carregarDecadasStream();
-novoJogo();
 verificarLoginExistente();
 </script>
