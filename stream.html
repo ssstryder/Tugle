@@ -141,16 +141,56 @@ var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
   .segmentado-stream button+button{border-left:1px solid var(--linha-forte)}
   .segmentado-stream button.ativo{background:var(--carvao);color:var(--osso)}
 
-  .tela-configuracao{border:1px solid var(--linha);border-radius:6px;padding:32px;
-    max-width:520px;margin:0 auto}
+  .tela-configuracao{border:1px solid var(--linha-forte);border-radius:14px;padding:36px 40px;
+    max-width:640px;margin:0 auto;box-shadow:0 20px 50px rgba(0,0,0,.15)}
   .tela-configuracao h2{font-family:var(--serif);font-weight:400;font-size:26px;margin:0 0 4px}
-  .tela-configuracao .sub-config{font-size:13px;color:rgba(var(--tinta-rgb),.55);margin:0 0 22px}
-  .tela-configuracao .modo-stream{border-bottom:0;margin-bottom:0;padding-bottom:0;
-    flex-direction:column;align-items:stretch;gap:16px}
-  .tela-configuracao .linha-config{display:flex;justify-content:space-between;align-items:center}
-  .tela-configuracao select{padding:8px 10px;border:1px solid var(--linha-forte);border-radius:4px;
-    background:var(--osso);color:var(--carvao);font:500 13px/1 var(--sans)}
-  .b-comecar{width:100%;margin-top:26px;padding:16px;font-size:16px;border-radius:6px}
+  .tela-configuracao .sub-config{font-size:13px;color:rgba(var(--tinta-rgb),.55);margin:0 0 26px}
+
+  .secao-config{margin-bottom:24px}
+  .rot-config{font:700 12px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;
+    color:rgba(var(--tinta-rgb),.5);display:block;margin-bottom:12px}
+
+  .grelha-origem{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .cartao-origem{position:relative;overflow:hidden;border-radius:12px;height:72px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    border:3px solid transparent;transition:transform .1s;appearance:none;padding:0}
+  .cartao-origem:hover{transform:translateY(-2px)}
+  .cartao-origem .nome{position:relative;z-index:2;font:800 14px/1 var(--sans);color:#fff;
+    letter-spacing:.01em;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+  .cartao-origem.ativo{border-color:#3E7A4E;box-shadow:0 0 0 3px rgba(62,122,78,.2)}
+  .cartao-origem svg{position:absolute;inset:0;width:100%;height:100%}
+  .cartao-origem.todos{background:var(--carvao)}
+  .cartao-origem.todos svg circle{fill:none;stroke:rgba(255,255,255,.14);stroke-width:1}
+  .cartao-origem.nacional::after,
+  .cartao-origem.internacional::after{content:"";position:absolute;inset:0;background:rgba(23,20,15,.42)}
+
+  .grelha-decada{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  .cartao-decada-cfg{position:relative;overflow:hidden;border-radius:10px;height:64px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    border:3px solid transparent;font-family:var(--serif);font-size:18px;color:#fff;
+    transition:transform .1s;appearance:none;padding:0}
+  .cartao-decada-cfg:hover{transform:translateY(-2px)}
+  .cartao-decada-cfg span{position:relative;z-index:1}
+  .cartao-decada-cfg.ativo{border-color:#3E7A4E;box-shadow:0 0 0 3px rgba(62,122,78,.2)}
+  .cartao-decada-cfg.todas{background:var(--carvao)}
+  .cartao-decada-cfg.tema-1990{background:
+      radial-gradient(circle at 24% 22%, rgba(255,255,255,.55) 1px, transparent 1.6px) 0 0/16px 16px,
+      radial-gradient(circle at 68% 58%, rgba(255,255,255,.4) 1px, transparent 1.6px) 0 0/20px 20px,
+      linear-gradient(135deg,#3d1a5c,#8c1f6b)}
+  .cartao-decada-cfg.tema-2000{background:linear-gradient(135deg,#00c2d1,#7b2ff7 55%,#ff2fb0)}
+  .cartao-decada-cfg.tema-2010{background:linear-gradient(135deg,#f7971e,#e0457b 60%,#8e44ec)}
+  .cartao-decada-cfg.tema-2020{background:linear-gradient(160deg,#111,#2b2b2b)}
+  .cartao-decada-cfg.tema-outro{background:linear-gradient(135deg,#555,#222)}
+
+  .barra-config-inferior{display:flex;gap:14px;align-items:flex-end}
+  .campo-config{flex:1}
+  .campo-config label{font:700 10px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;
+    color:rgba(var(--tinta-rgb),.45);display:block;margin-bottom:6px}
+  .campo-config select{width:100%;padding:12px;border:2px solid var(--linha-forte);border-radius:8px;
+    background:var(--osso);color:var(--carvao);font:700 14px/1 var(--sans)}
+  .b-comecar{flex:1.4;height:52px;background:#3E7A4E;color:#fff;border:0;
+    border-radius:8px;font:800 16px/1 var(--sans);letter-spacing:.02em;cursor:pointer}
+  .b-comecar:hover{background:#356a42}
 
   .b-reconfigurar{appearance:none;border:1px solid var(--linha-forte);background:none;
     color:rgba(var(--tinta-rgb),.55);font:500 11px/1 var(--sans);padding:6px 10px;
@@ -217,23 +257,60 @@ var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
     <h2>Configurar o jogo</h2>
     <p class="sub-config">Escolhe as opções e liga o chat acima antes de começares.</p>
 
-    <div class="modo-stream">
-      <div class="linha-config">
-        <span class="rotulo-mini">Origem</span>
-        <div class="segmentado-stream" id="stream-origem">
-          <button class="ativo" data-valor="todos">Todos</button>
-          <button data-valor="nacional">Nacional</button>
-          <button data-valor="internacional">Internacional</button>
-        </div>
+    <div class="secao-config">
+      <span class="rot-config">Origem</span>
+      <div class="grelha-origem" id="stream-origem">
+        <button class="cartao-origem todos ativo" data-valor="todos">
+          <svg viewBox="0 0 200 72"><circle cx="30" cy="20" r="14"/><circle cx="90" cy="52" r="20"/><circle cx="160" cy="15" r="10"/><circle cx="175" cy="58" r="16"/></svg>
+          <span class="nome">Todos</span>
+        </button>
+        <button class="cartao-origem nacional" data-valor="nacional">
+          <svg viewBox="0 0 200 72" preserveAspectRatio="xMidYMid slice">
+            <rect width="80" height="72" fill="#046A38"/>
+            <rect x="80" width="120" height="72" fill="#DA291C"/>
+            <circle cx="80" cy="36" r="19" fill="#FFD100" stroke="#046A38" stroke-width="2"/>
+            <circle cx="80" cy="36" r="12" fill="#DA291C" stroke="#FFD100" stroke-width="1.4"/>
+            <rect x="74" y="28" width="12" height="16" fill="#F4F1EA" opacity=".92"/>
+          </svg>
+          <span class="nome">Nacional</span>
+        </button>
+        <button class="cartao-origem internacional" data-valor="internacional">
+          <svg viewBox="0 0 200 72" preserveAspectRatio="xMidYMid slice">
+            <g transform="translate(30,9) rotate(-8)">
+              <rect width="70" height="44" fill="#B22234"/>
+              <rect y="5" width="70" height="5" fill="#fff"/>
+              <rect y="14" width="70" height="5" fill="#fff"/>
+              <rect y="23" width="70" height="5" fill="#fff"/>
+              <rect y="32" width="70" height="5" fill="#fff"/>
+              <rect width="30" height="23" fill="#3C3B6E"/>
+            </g>
+            <g transform="translate(70,25)">
+              <rect width="70" height="44" fill="#fff"/>
+              <rect y="17" width="70" height="10" fill="#00247D"/>
+              <rect x="30" width="10" height="44" fill="#00247D"/>
+              <rect y="19" width="70" height="6" fill="#CF142B"/>
+              <rect x="32" width="6" height="44" fill="#CF142B"/>
+            </g>
+            <g transform="translate(122,4) rotate(8)">
+              <rect width="58" height="38" fill="#fff"/>
+              <circle cx="29" cy="19" r="11" fill="#BC002D"/>
+            </g>
+          </svg>
+          <span class="nome">Internacional</span>
+        </button>
       </div>
-      <div class="linha-config">
-        <span class="rotulo-mini">Década</span>
-        <div class="segmentado-stream" id="stream-decada">
-          <button class="ativo" data-valor="todas">Todas</button>
-        </div>
+    </div>
+
+    <div class="secao-config">
+      <span class="rot-config">Década</span>
+      <div class="grelha-decada" id="stream-decada">
+        <button class="cartao-decada-cfg todas ativo" data-valor="todas"><span>Todas</span></button>
       </div>
-      <div class="linha-config">
-        <span class="rotulo-mini">Músicas</span>
+    </div>
+
+    <div class="barra-config-inferior">
+      <div class="campo-config">
+        <label>Músicas</label>
         <select id="stream-quantidade">
           <option value="15">15</option>
           <option value="20" selected>20</option>
@@ -241,8 +318,8 @@ var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
           <option value="30">30</option>
         </select>
       </div>
-      <div class="linha-config">
-        <span class="rotulo-mini">Temporizador</span>
+      <div class="campo-config">
+        <label>Temporizador</label>
         <select id="stream-temporizador">
           <option value="0">Sem limite</option>
           <option value="15">15 segundos</option>
@@ -251,9 +328,8 @@ var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
           <option value="45">45 segundos</option>
         </select>
       </div>
+      <button class="b-comecar" id="b-comecar-jogo">Jogar</button>
     </div>
-
-    <button class="btn primario b-comecar" id="b-comecar-jogo">Jogar</button>
   </div>
 
   <div class="tela-countdown" id="tela-countdown" style="display:none">
@@ -349,8 +425,12 @@ async function carregarDecadasStream(){
     if (!r.ok) return;
     var d = await r.json();
     var grupo = el("#stream-decada");
+    var temasConhecidos = { "1990":"tema-1990", "2000":"tema-2000", "2010":"tema-2010", "2020":"tema-2020" };
     (d.decadas || []).forEach(function(dec){
-      var b = criar("button", null, "'" + String(dec).slice(-2));
+      var tema = temasConhecidos[String(dec)] || "tema-outro";
+      var b = criar("button", "cartao-decada-cfg " + tema);
+      var span = criar("span", null, "'" + String(dec).slice(-2));
+      b.appendChild(span);
       b.dataset.valor = dec;
       grupo.appendChild(b);
     });
