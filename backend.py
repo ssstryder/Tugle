@@ -28,6 +28,7 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -151,6 +152,12 @@ def limite_excedido(chave: str, maximo: int, janela_segundos: int) -> bool:
         return True
     historico.append(agora)
     return False
+
+
+async def limitar_puzzle_stream(request: Request) -> None:
+    ip = request.client.host if request.client else "desconhecido"
+    if limite_excedido(f"stream:{ip}", maximo=20, janela_segundos=300):
+        raise HTTPException(429, "Demasiados pedidos em pouco tempo. Espera um pouco antes de gerares outro jogo.")
 
 
 # A Deezer recorta os 30s de antevisão a começar algures na música, muitas
@@ -693,6 +700,49 @@ def id_puzzle_modo(data: dt.date, origem: str, decada: int | None) -> str:
     return f"{data.isoformat()}--{sufixo_origem}--{sufixo_decada}"
 
 
+async def montar_lista_stream(origem: str, decada: int | None, quantidade: int) -> list[dict]:
+    """Para a página de stream — ao contrário do puzzle normal, é gerado
+    na hora, sempre diferente, sem grelha (não faz falta, o stream mostra
+    uma música de cada vez) e sem ficar gravado. É assim de propósito:
+    o streamer quer poder jogar várias rondas diferentes ao longo do dia,
+    não o mesmo puzzle fixo."""
+    async with Sessao() as sessao:
+        candidatas = list((await sessao.execute(select(Faixa))).scalars().all())
+
+    candidatas = [f for f in candidatas if candidatos_resposta(f)]
+    if origem == "nacional":
+        candidatas = [f for f in candidatas if not eh_internacional(f.artista)]
+    elif origem == "internacional":
+        candidatas = [f for f in candidatas if eh_internacional(f.artista)]
+    if decada:
+        candidatas = [f for f in candidatas if f.decada == decada]
+
+    if len(candidatas) < min(quantidade, 6):
+        raise RuntimeError(
+            f"Só há {len(candidatas)} faixas com este filtro — tenta pedir menos músicas, "
+            "ou muda a origem/década."
+        )
+
+    semente = f"stream-{uuid4()}"
+    aleatorio = random.Random(semente)
+    aleatorio.shuffle(candidatas)
+    candidatas = candidatas[:quantidade]
+
+    entradas = []
+    respostas_usadas: set[str] = set()
+    for f in candidatas:
+        escolha = escolher_entrada(f, semente, respostas_usadas)
+        if not escolha:
+            continue
+        resposta, pista = escolha
+        entradas.append({
+            "id": f.id, "resposta": resposta, "titulo": f.titulo, "artista": f.artista,
+            "capa": f.capa, "genero": genero_traduzido(f.genero), "decada": f.decada,
+            "pista": pista, "inicio": INICIO_EXCERTO_SEGUNDOS,
+        })
+    return entradas
+
+
 async def montar_puzzle_modo(data: dt.date, origem: str, decada: int | None) -> dict:
     """Puzzle diário de um modo (origem e/ou década) — tal como o puzzle
     de hoje normal, é gravado e partilhado: todos os que escolherem a
@@ -1032,6 +1082,25 @@ async def puzzle_hoje_modo(origem: str, decada: str) -> dict:
     except RuntimeError as erro:
         raise HTTPException(422, str(erro))
     return para_cliente(puzzle)
+
+
+@app.get("/puzzle/stream")
+async def puzzle_stream(
+    origem: str = "todos", decada: int | None = None, quantidade: int = 16,
+    _: None = Depends(limitar_puzzle_stream),
+) -> dict:
+    """Só para a página de stream — gerado na hora, sempre um jogo
+    diferente, nunca gravado. `quantidade` fica sempre entre 10 e 30."""
+    if origem not in ("todos", "nacional", "internacional"):
+        raise HTTPException(400, "origem tem de ser 'todos', 'nacional' ou 'internacional'")
+    quantidade = max(10, min(30, quantidade))
+    try:
+        entradas = await montar_lista_stream(origem, decada, quantidade)
+    except RuntimeError as erro:
+        raise HTTPException(422, str(erro))
+    if len(entradas) < 6:
+        raise HTTPException(422, "Não consegui montar entradas suficientes com este filtro.")
+    return {"entradas": [{**e, "audio": f"/audio/{e['id']}"} for e in entradas]}
 
 
 @app.get("/opcoes-modo")

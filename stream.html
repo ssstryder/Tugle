@@ -1,7 +1,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tugle — Stream</title>
+<meta name="description" content="Joga o Tugle em direto na Twitch — uma palavra de cada vez, com o chat a competir para acertar primeiro.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+<meta property="og:title" content="Tugle — Stream">
+<meta property="og:description" content="Joga o Tugle em direto na Twitch, com o chat a competir para acertar primeiro.">
+<meta property="og:image" content="https://www.tugle.pt/og-image.png">
+<meta property="og:url" content="https://www.tugle.pt/stream">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://www.tugle.pt/og-image.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -101,6 +110,28 @@
   .aviso-config{font-size:13px;line-height:1.6;color:rgba(var(--tinta-rgb),.7);background:rgba(184,70,31,.08);
     border:1px solid rgba(184,70,31,.25);border-radius:6px;padding:14px 16px;margin-bottom:16px}
   .aviso-config code{background:rgba(var(--tinta-rgb),.08);padding:1px 5px;border-radius:3px;font-size:12px}
+
+  .cortina-confirmar{position:fixed;inset:0;background:rgba(var(--tinta-rgb),.28);opacity:0;
+    pointer-events:none;transition:opacity .18s;z-index:60}
+  .cortina-confirmar.aberta{opacity:1;pointer-events:auto}
+  .modal-confirmar{position:fixed;top:50%;left:50%;transform:translate(-50%,-48%);width:320px;
+    max-width:88vw;background:var(--osso);border:1px solid var(--linha-forte);border-radius:6px;
+    padding:24px;z-index:61;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
+  .modal-confirmar.aberta{opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
+  .modal-confirmar h2{font-family:var(--serif);font-weight:400;font-size:22px;margin:0 0 10px}
+  .modal-confirmar p{font-size:13px;line-height:1.5;color:rgba(var(--tinta-rgb),.65);margin:0 0 18px}
+  .modal-confirmar .linha-botoes{display:flex;gap:8px}
+  .modal-confirmar .linha-botoes .btn{flex:1;text-align:center}
+
+  .modo-stream{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--linha)}
+  .modo-stream .rotulo-mini{font:600 11px/1 var(--sans);letter-spacing:.08em;
+    text-transform:uppercase;color:rgba(var(--tinta-rgb),.45)}
+  .segmentado-stream{display:flex;border:1px solid var(--linha-forte);border-radius:18px;overflow:hidden}
+  .segmentado-stream button{appearance:none;border:0;background:none;padding:6px 12px;
+    font:500 12px/1 var(--sans);cursor:pointer;color:var(--carvao)}
+  .segmentado-stream button+button{border-left:1px solid var(--linha-forte)}
+  .segmentado-stream button.ativo{background:var(--carvao);color:var(--osso)}
 </style>
 
 <script>
@@ -113,11 +144,39 @@
 })();
 </script>
 
+<div class="cortina-confirmar" id="cortina-confirmar-placar"></div>
+<div class="modal-confirmar" id="modal-confirmar-placar">
+  <h2>Reiniciar placar?</h2>
+  <p>Apaga a pontuação de todos os que já responderam nesta sessão.</p>
+  <div class="linha-botoes">
+    <button class="btn" id="b-cancelar-reiniciar">Cancelar</button>
+    <button class="btn primario" id="b-confirmar-reiniciar">Reiniciar</button>
+  </div>
+</div>
+
 <div class="app">
   <header class="cabecalho">
     <a href="/" class="logo" style="text-decoration:none;color:inherit">Tug<i>le</i> <span class="sub" style="margin-left:8px">stream</span></a>
     <div class="sub" id="etiqueta-dia"></div>
   </header>
+
+  <div class="modo-stream">
+    <span class="rotulo-mini">Origem</span>
+    <div class="segmentado-stream" id="stream-origem">
+      <button class="ativo" data-valor="todos">Todos</button>
+      <button data-valor="nacional">Nacional</button>
+      <button data-valor="internacional">Internacional</button>
+    </div>
+    <span class="rotulo-mini">Década</span>
+    <div class="segmentado-stream" id="stream-decada">
+      <button class="ativo" data-valor="todas">Todas</button>
+    </div>
+    <span class="rotulo-mini">Músicas</span>
+    <input type="number" id="stream-quantidade" min="10" max="30" value="16" style="width:56px;
+      padding:6px 8px;border:1px solid var(--linha-forte);border-radius:4px;background:var(--osso);
+      color:var(--carvao);font:500 12px/1 var(--sans)">
+    <button class="btn primario" id="b-novo-jogo">Novo jogo</button>
+  </div>
 
   <div id="aviso-sem-client-id" class="aviso-config" style="display:none">
     Ainda não configuraste o <code>CLIENT_ID</code> da Twitch neste ficheiro — sem isso só dá para ligar em modo
@@ -178,7 +237,7 @@
 
 <script>
 /* ============ configuração — troca pelo teu Client ID da Twitch ============ */
-var CLIENT_ID = "ywi2g8t6ihp1so3zqsl80sbcs6shv6";
+var CLIENT_ID = "COLOCA_AQUI_O_TEU_CLIENT_ID";
 
 function el(s){ return document.querySelector(s); }
 function normalizar(t){
@@ -195,12 +254,26 @@ if (!CLIENT_ID || CLIENT_ID.indexOf("COLOCA_AQUI") === 0){
 var entradas = [], indiceAtual = -1, respondida = false;
 var placar = {};
 
-async function carregarPuzzleDeHoje(){
+var modoStream = { origem: "todos", decada: "todas" };
+
+async function novoJogo(){
+  el("#progresso").textContent = "A montar um jogo novo…";
+  el("#b-novo-jogo").disabled = true;
   try {
-    var r = await fetch("/puzzle/hoje");
-    if (!r.ok) throw new Error("estado "+r.status);
+    var quantidade = Math.max(10, Math.min(30, parseInt(el("#stream-quantidade").value, 10) || 16));
+    el("#stream-quantidade").value = quantidade;
+    var params = new URLSearchParams({ origem: modoStream.origem, quantidade: quantidade });
+    if (modoStream.decada && modoStream.decada !== "todas") params.set("decada", modoStream.decada);
+    var r = await fetch("/puzzle/stream?" + params.toString());
+    if (!r.ok){
+      var erro = await r.json().catch(function(){ return {}; });
+      throw new Error(erro.detail || ("estado " + r.status));
+    }
     var p = await r.json();
-    el("#etiqueta-dia").textContent = p.nome || "";
+    var partesNome = [];
+    if (modoStream.origem !== "todos") partesNome.push(modoStream.origem === "nacional" ? "Nacional" : "Internacional");
+    if (modoStream.decada && modoStream.decada !== "todas") partesNome.push("anos " + modoStream.decada);
+    el("#etiqueta-dia").textContent = partesNome.length ? partesNome.join(", ") : "Jogo novo";
     entradas = p.entradas.slice();
     for (var i = entradas.length - 1; i > 0; i--){
       var j = Math.floor(Math.random() * (i + 1));
@@ -209,9 +282,37 @@ async function carregarPuzzleDeHoje(){
     indiceAtual = -1;
     proximaPalavra();
   } catch(e){
-    el("#progresso").textContent = "Não consegui ir buscar o puzzle de hoje.";
+    el("#progresso").textContent = e.message || "Não consegui montar um jogo novo.";
+  } finally {
+    el("#b-novo-jogo").disabled = false;
   }
 }
+
+async function carregarDecadasStream(){
+  try {
+    var r = await fetch("/opcoes-modo");
+    if (!r.ok) return;
+    var d = await r.json();
+    var grupo = el("#stream-decada");
+    (d.decadas || []).forEach(function(dec){
+      var b = criar("button", null, "'" + String(dec).slice(-2));
+      b.dataset.valor = dec;
+      grupo.appendChild(b);
+    });
+  } catch(e){}
+}
+function ligarSegmentadoStream(id, chave){
+  el(id).addEventListener("click", function(ev){
+    var b = ev.target.closest("[data-valor]");
+    if (!b) return;
+    el(id).querySelectorAll("[data-valor]").forEach(function(x){ x.classList.remove("ativo"); });
+    b.classList.add("ativo");
+    modoStream[chave] = b.dataset.valor;
+  });
+}
+ligarSegmentadoStream("#stream-origem", "origem");
+ligarSegmentadoStream("#stream-decada", "decada");
+el("#b-novo-jogo").onclick = novoJogo;
 
 function entradaAtual(){ return entradas[indiceAtual]; }
 
@@ -328,9 +429,19 @@ function desenharPlacar(){
   });
 }
 el("#b-reiniciar-placar").onclick = function(){
-  if (!confirm("Repor o placar a zeros?")) return;
+  el("#cortina-confirmar-placar").classList.add("aberta");
+  el("#modal-confirmar-placar").classList.add("aberta");
+};
+function fecharConfirmarPlacar(){
+  el("#cortina-confirmar-placar").classList.remove("aberta");
+  el("#modal-confirmar-placar").classList.remove("aberta");
+}
+el("#b-cancelar-reiniciar").onclick = fecharConfirmarPlacar;
+el("#cortina-confirmar-placar").onclick = fecharConfirmarPlacar;
+el("#b-confirmar-reiniciar").onclick = function(){
   placar = {};
   desenharPlacar();
+  fecharConfirmarPlacar();
 };
 
 /* ============ login com a Twitch (OAuth, para poder escrever no chat) ============ */
@@ -469,6 +580,7 @@ function processarMensagemChat(utilizador, mensagem){
 el("#b-ligar").onclick = function(){ ligarTwitch(el("#canal").value); };
 el("#canal").addEventListener("keydown", function(ev){ if (ev.key === "Enter") el("#b-ligar").click(); });
 
-carregarPuzzleDeHoje();
+carregarDecadasStream();
+novoJogo();
 verificarLoginExistente();
 </script>
