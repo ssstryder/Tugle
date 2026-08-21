@@ -114,11 +114,30 @@
   .segmentado-modo .seg-item+.seg-item{border-left:1px solid var(--carvao)}
   .segmentado-modo .seg-item.ativo{background:var(--carvao);color:var(--osso)}
 
-  .decadas-modo{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;margin-top:10px}
-  .decadas-modo .decada-item{font-family:var(--serif);font-size:28px;line-height:1;
-    cursor:pointer;color:rgba(var(--tinta-rgb),.28);transition:color .15s;background:none;
-    border:0;padding:0;appearance:none}
-  .decadas-modo .decada-item.ativo{color:var(--acento)}
+  .decadas-modo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .decadas-modo .decada-item{position:relative;overflow:hidden;border-radius:8px;
+    border:2px solid transparent;padding:20px 10px;text-align:center;cursor:pointer;
+    color:#fff;font-family:var(--serif);font-size:23px;line-height:1;
+    transition:transform .12s,border-color .12s;appearance:none}
+  .decadas-modo .decada-item:hover{transform:scale(1.03)}
+  .decadas-modo .decada-item.ativo{border-color:var(--acento)}
+  .decadas-modo .decada-item.tema-todas{background:var(--carvao);color:var(--osso);
+    grid-column:1 / -1}
+  .decadas-modo .decada-item.tema-1990{
+    background:
+      radial-gradient(circle at 24% 22%, rgba(255,255,255,.55) 1px, transparent 1.6px) 0 0/16px 16px,
+      radial-gradient(circle at 68% 58%, rgba(255,255,255,.4) 1px, transparent 1.6px) 0 0/20px 20px,
+      radial-gradient(circle at 40% 80%, rgba(255,255,255,.35) 1px, transparent 1.6px) 0 0/13px 13px,
+      linear-gradient(135deg,#3d1a5c,#8c1f6b)}
+  .decadas-modo .decada-item.tema-2000{
+    background:linear-gradient(135deg,#00c2d1,#7b2ff7 55%,#ff2fb0)}
+  .decadas-modo .decada-item.tema-2010{
+    background:linear-gradient(135deg,#f7971e,#e0457b 60%,#8e44ec)}
+  .decadas-modo .decada-item.tema-2020{background:linear-gradient(160deg,#111,#2b2b2b)}
+  .decadas-modo .decada-item.tema-2020::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(100deg,transparent 42%,rgba(226,129,79,.55) 50%,transparent 58%)}
+  .decadas-modo .decada-item.tema-outro{background:linear-gradient(135deg,#555,#222)}
+  .decadas-modo .decada-item span{position:relative;z-index:1}
 
   .lateral-cabecalho{display:flex;justify-content:space-between;align-items:baseline;
     margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--linha)}
@@ -520,7 +539,7 @@
 
   <span class="rotulo-modo">Década</span>
   <div class="decadas-modo" id="botoes-decada" data-tipo="decada">
-    <button class="decada-item ativo" data-valor="">Todas</button>
+    <button class="decada-item ativo tema-todas" data-valor=""><span>Todas</span></button>
   </div>
 
   <button class="btn primario" id="b-jogar-modo" style="width:100%;margin-top:26px">Jogar este modo</button>
@@ -1328,8 +1347,14 @@ async function carregarOpcoesModo(){
     if (!r.ok) throw new Error("estado "+r.status);
     var d = await r.json();
     var grupoDecada = el("#botoes-decada");
+    var temasConhecidos = { "1990":"tema-1990", "2000":"tema-2000", "2010":"tema-2010", "2020":"tema-2020" };
     (d.decadas || []).forEach(function(dec){
-      var b = criar("button","decada-item","'"+String(dec).slice(-2)); b.dataset.valor = dec; grupoDecada.appendChild(b);
+      var tema = temasConhecidos[String(dec)] || "tema-outro";
+      var b = criar("button","decada-item "+tema);
+      var span = criar("span",null,"'"+String(dec).slice(-2));
+      b.appendChild(span);
+      b.dataset.valor = dec;
+      grupoDecada.appendChild(b);
     });
     opcoesModoCarregadas = true;
   } catch(e){
