@@ -981,6 +981,7 @@ FICHEIRO_FAVICON = PASTA / "favicon.svg"
 FICHEIRO_OG_IMAGE = PASTA / "og-image.png"
 FICHEIRO_ROBOTS = PASTA / "robots.txt"
 FICHEIRO_SITEMAP = PASTA / "sitemap.xml"
+FICHEIRO_ADS = PASTA / "ads.txt"
 
 
 @app.get("/", include_in_schema=False)
@@ -1044,6 +1045,13 @@ async def sitemap():
     if FICHEIRO_SITEMAP.exists():
         return FileResponse(FICHEIRO_SITEMAP, media_type="application/xml")
     raise HTTPException(404, "sitemap.xml não encontrado")
+
+
+@app.get("/ads.txt", include_in_schema=False)
+async def ads_txt():
+    if FICHEIRO_ADS.exists():
+        return FileResponse(FICHEIRO_ADS, media_type="text/plain")
+    raise HTTPException(404, "ads.txt não encontrado")
 
 
 @app.get("/estado")
