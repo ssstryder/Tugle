@@ -197,6 +197,8 @@ ARTISTAS = [
     # pimba (muito popular em Portugal, apesar de tudo)
     "Quim Barreiros", "Tony Carreira", "Emanuel", "Ágata", "Ana Malhoa",
     "Marco Paulo",
+    # outros
+    "Isak", "Zigarro", "Armando Teles",
 ]
 
 
@@ -469,7 +471,7 @@ async def explorar_artista(artista: str) -> list[dict]:
             "capa": faixa.get("album", {}).get("cover_medium", ""),
             "audio": faixa["preview"],
         })
-        if len(faixas) >= 12:
+        if len(faixas) >= 6:
             break
     if not faixas:
         print(f"[tugle]   {artista}: encontrado, mas nenhuma faixa tem excerto (preview vazio)")
@@ -981,6 +983,7 @@ FICHEIRO_FAVICON = PASTA / "favicon.svg"
 FICHEIRO_OG_IMAGE = PASTA / "og-image.png"
 FICHEIRO_ROBOTS = PASTA / "robots.txt"
 FICHEIRO_SITEMAP = PASTA / "sitemap.xml"
+FICHEIRO_ADS = PASTA / "ads.txt"
 
 
 @app.get("/", include_in_schema=False)
@@ -1044,6 +1047,13 @@ async def sitemap():
     if FICHEIRO_SITEMAP.exists():
         return FileResponse(FICHEIRO_SITEMAP, media_type="application/xml")
     raise HTTPException(404, "sitemap.xml não encontrado")
+
+
+@app.get("/ads.txt", include_in_schema=False)
+async def ads_txt():
+    if FICHEIRO_ADS.exists():
+        return FileResponse(FICHEIRO_ADS, media_type="text/plain")
+    raise HTTPException(404, "ads.txt não encontrado")
 
 
 @app.get("/estado")
@@ -1159,10 +1169,25 @@ async def catalogo_resumo() -> dict:
     async with Sessao() as sessao:
         todas = list((await sessao.execute(select(Faixa))).scalars().all())
     por_genero: dict[str, int] = {}
+    por_artista: dict[str, int] = {}
     for f in todas:
         chave = f.genero or "sem género"
         por_genero[chave] = por_genero.get(chave, 0) + 1
-    return {"total": len(todas), "por_genero": por_genero}
+        por_artista[f.artista] = por_artista.get(f.artista, 0) + 1
+
+    artistas_todos = set(ARTISTAS) | set(ARTISTAS_INTERNACIONAIS)
+    artistas_com_faixas = {normalizar(a) for a in por_artista}
+    artistas_por_explorar = sorted(
+        a for a in artistas_todos if normalizar(a) not in artistas_com_faixas
+    )
+
+    return {
+        "total": len(todas),
+        "por_genero": por_genero,
+        "por_artista": dict(sorted(por_artista.items(), key=lambda x: -x[1])),
+        "artistas_com_faixas": len(por_artista),
+        "artistas_por_explorar": artistas_por_explorar,
+    }
 
 
 @app.post("/catalogo/limpar")
