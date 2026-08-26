@@ -75,7 +75,7 @@ TAMANHO_MINIMO_CATALOGO = 1000
 # Datas festivas: se não houver faixas suficientes desse tema nesse dia,
 # cai-se sozinho no catálogo normal — nunca bloqueia a geração do puzzle.
 ARTISTAS_FADO = {
-    "Amália Rodrigues", "Mariza", "Carminho", "Ana Moura", "Camané",
+    "Amália Rodrigues", "Mariza", "Carminho", "Ana Moura",
     "Gisela João", "Cuca Roseta", "Raquel Tavares", "Sara Correia",
 }
 ARTISTAS_PIMBA = {
@@ -169,12 +169,12 @@ INICIO_EXCERTO_SEGUNDOS = 6
 
 ARTISTAS = [
     # fado
-    "Amália Rodrigues", "Mariza", "Carminho", "Ana Moura", "Camané",
+    "Amália Rodrigues", "Mariza", "Carminho", "Ana Moura",
     "Gisela João", "Cuca Roseta", "Raquel Tavares", "Sara Correia",
     # rock e indie
     "Zeca Afonso", "Sérgio Godinho", "Rui Veloso",
     "Xutos & Pontapés", "GNR", "Ornatos Violeta",
-    "Pedro Abrunhosa", "Linda Martini",
+    "Pedro Abrunhosa",
     "Capitão Fausto", "Toranja", "Delfins", "D'ZRT", "Anjos",
     # hip-hop, R&B, kizomba, trap
     "Da Weasel", "Slow J", "Plutónio", "Papillon", "Dino D'Santiago",
@@ -188,9 +188,9 @@ ARTISTAS = [
     "Nininho Vaz Maia", "Gama WNTD", "ATOA", "LON3R JOHNY", "Dama",
     "9 Miller", "Hollyhood", "Dillaz", "Richie Campbell",
     # pop
-    "Salvador Sobral", "Conan Osíris", "Bárbara Tinoco", "Diogo Piçarra",
+    "Salvador Sobral", "Bárbara Tinoco", "Diogo Piçarra",
     "Aurea", "Ana Bacalhau", "Miguel Araújo", "David Carreira",
-    "Fernando Daniel", "Marisa Liz", "Miguel Gameiro", "Cláudia Pascoal",
+    "Fernando Daniel", "Marisa Liz", "Cláudia Pascoal",
     "Iolanda", "Bárbara Bandeira", "Blaya", "Mafalda Veiga", "Rita Guerra",
     "Van Zee", "Carolina Deslandes", "MARO", "NAPA", "Vizinhos",
     "Soraia Ramos", "Pedro Mafama",
@@ -435,13 +435,13 @@ IDS_ARTISTA_DEEZER: dict[str, int] = {
 
 
 async def explorar_artista(artista: str) -> list[dict]:
-    """Até 3 faixas com excerto disponível para um artista."""
+    """Até 6 faixas com excerto disponível para um artista."""
     id_conhecido = IDS_ARTISTA_DEEZER.get(artista)
     if id_conhecido:
         artista_id = id_conhecido
     else:
         try:
-            r = await cliente.get(f"{DEEZER}/search/artist", params={"q": artista, "limit": 1})
+            r = await cliente.get(f"{DEEZER}/search/artist", params={"q": artista, "limit": 5})
             achados = (r.json() or {}).get("data") or []
         except Exception as erro:
             print(f"[tugle]   {artista}: falhou a pesquisa de artista ({erro})")
@@ -449,7 +449,21 @@ async def explorar_artista(artista: str) -> list[dict]:
         if not achados:
             print(f"[tugle]   {artista}: a Deezer não encontrou este artista")
             return []
-        artista_id = achados[0]["id"]
+        # A Deezer às vezes devolve um homónimo em vez do artista certo
+        # (ex.: pesquisar "Ana" pode encontrar um artista qualquer chamado
+        # Ana, nada a ver com o que queremos) — só aceitamos se o nome
+        # devolvido bater certo com o que pedimos, letra por letra depois
+        # de normalizado. Sem correspondência exata, mais vale não ter
+        # faixas nenhumas do que ter faixas do artista errado.
+        alvo = normalizar(artista)
+        correspondencia = next(
+            (a for a in achados if normalizar(a.get("name", "")) == alvo), None
+        )
+        if not correspondencia:
+            nomes = ", ".join(a.get("name", "?") for a in achados[:3])
+            print(f"[tugle]   {artista}: a Deezer só encontrou homónimos diferentes ({nomes}) — a ignorar")
+            return []
+        artista_id = correspondencia["id"]
 
     try:
         r = await cliente.get(f"{DEEZER}/artist/{artista_id}/top", params={"limit": 20})
@@ -1202,7 +1216,7 @@ async def catalogo_limpar(artista: str | None = None, _: None = Depends(exigir_c
             alvo = normalizar(artista)
             removidas = [f for f in todas if normalizar(f.artista) == alvo]
         else:
-            artistas_atuais = {normalizar(a) for a in ARTISTAS}
+            artistas_atuais = {normalizar(a) for a in ARTISTAS} | {normalizar(a) for a in ARTISTAS_INTERNACIONAIS}
             removidas = [f for f in todas if normalizar(f.artista) not in artistas_atuais]
         for f in removidas:
             await sessao.delete(f)
