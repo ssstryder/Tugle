@@ -328,14 +328,6 @@
   .faixa .acoes button.mudo{color:rgba(var(--tinta-rgb),.55)}
   .faixa.sem{opacity:.4}
 
-  .teclado{margin-top:16px;display:none;gap:5px;flex-direction:column;align-items:center}
-  .teclado.mostra{display:flex}
-  .fila{display:flex;gap:5px;width:100%;justify-content:center}
-  .tecla{flex:1;max-width:42px;height:44px;border-radius:3px;border:1px solid var(--linha-forte);
-    cursor:pointer;background:var(--osso);color:var(--carvao);font:600 14px/1 var(--sans)}
-  .tecla:active{background:var(--carvao);color:var(--osso)}
-  .tecla.larga{max-width:66px;font-size:16px}
-
   .fantasma{position:fixed;opacity:0;pointer-events:none;left:-9999px;top:0;width:1px;height:1px}
 
   .vitoria{padding:20px 0;border-bottom:1px solid var(--linha);margin-bottom:6px}
@@ -411,6 +403,11 @@
         <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z"></path>
       </svg>
     </button>
+    <button class="topo-tema" id="b-tema-estatisticas" aria-label="Ver as tuas estatísticas" title="Estatísticas">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 20V10M12 20V4M20 20v-7"></path>
+      </svg>
+    </button>
     <nav class="abas">
       <button class="aba ativa" data-vista="jogar">Jogar</button>
       <div class="check-dropdown">
@@ -449,7 +446,7 @@
     <div class="barra">
       <button class="btn primario" id="b-hoje">Puzzle de hoje</button>
       <select id="sel-puzzle" class="cresce esconde"></select>
-      <button class="btn cresce" id="b-abrir-arquivo-barra">Arquivo</button>
+      <button class="btn cresce" id="b-abrir-arquivo-barra">Arquivo<span id="badge-arquivo" style="display:none;margin-left:6px;background:var(--acento);color:#fff;border-radius:99px;font:700 10.5px/1 var(--sans);padding:3px 6px"></span></button>
       <button class="btn suave" id="b-limpar">Limpar</button>
       <button class="btn suave" id="b-partilhar">Copiar link</button>
     </div>
@@ -486,7 +483,6 @@
           </div>
         </div>
 
-        <div class="teclado" id="teclado"></div>
       </div>
 
       <div class="pistas">
@@ -527,9 +523,26 @@
 </div>
 
 <div class="cortina" id="cortina-estatisticas"></div>
-<div class="boas-vindas" id="estatisticas">
+<div class="boas-vindas" id="estatisticas" style="width:360px">
   <h2>As tuas estatísticas</h2>
-  <div id="conteudo-estatisticas" style="font-size:14px;line-height:1.7;color:rgba(var(--tinta-rgb),.75);margin-bottom:20px"></div>
+  <div id="conteudo-estatisticas" style="font-size:14px;line-height:1.7;color:rgba(var(--tinta-rgb),.75);margin-bottom:18px"></div>
+
+  <div style="border-top:1px solid var(--linha);padding-top:16px;margin-bottom:16px">
+    <div style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5);margin-bottom:10px">Comparar com amigos</div>
+    <p class="ajuda" style="margin:0 0 10px">O teu código — partilha-o para amigos verem as tuas estatísticas.</p>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <code id="codigo-jogador" style="flex:1;background:rgba(var(--tinta-rgb),.06);padding:9px 10px;border-radius:3px;font:600 15px/1 var(--mono);letter-spacing:.06em;text-align:center">------</code>
+      <button class="btn suave" id="b-copiar-codigo" style="width:auto;white-space:nowrap">Copiar</button>
+    </div>
+    <p class="ajuda" style="margin:0 0 8px">Tens o código de um amigo? Compara aqui:</p>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input id="input-codigo-amigo" placeholder="CÓDIGO" maxlength="12"
+        style="flex:1;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:600 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase">
+      <button class="btn suave" id="b-comparar-amigo" style="width:auto;white-space:nowrap">Comparar</button>
+    </div>
+    <div id="resultado-comparacao" style="font-size:13.5px;line-height:1.6"></div>
+  </div>
+
   <button class="btn primario" id="b-fechar-estatisticas">Fechar</button>
 </div>
 
@@ -1052,17 +1065,6 @@ el("#fantasma").addEventListener("input", function(ev){
   var n = normalizar(ev.target.value); ev.target.value = "";
   if (n) escrever(n[n.length-1]);
 });
-(function(){
-  var filas = ["QWERTYUIOP","ASDFGHJKL","ZXCVBNM"], t = el("#teclado");
-  filas.forEach(function(f,idx){
-    var d = criar("div","fila");
-    f.split("").forEach(function(l){ var b=criar("button","tecla",l); b.onclick=function(){ escrever(l); }; d.appendChild(b); });
-    if (idx===2){ var b=criar("button","tecla larga","⌫"); b.onclick=apagar; d.appendChild(b); }
-    t.appendChild(d);
-  });
-  if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) t.classList.add("mostra");
-})();
-
 /* ============ acções do jogo ============ */
 el("#b-tocar").addEventListener("click", function(){
   if (this.classList.contains("inativo")) return;
@@ -1445,6 +1447,7 @@ async function marcarConcluido(puzzleId, semAjuda){
   if (!(puzzleId in dados)){
     dados[puzzleId] = !!semAjuda;
     await loja.set(CHAVE_CONCLUIDOS, JSON.stringify(dados));
+    if (typeof atualizarBadgeArquivo === "function") atualizarBadgeArquivo();
   }
 }
 async function carregarArquivo(){
@@ -1527,33 +1530,103 @@ document.addEventListener("keydown", function(ev){
   };
 })();
 
-/* ============ estatísticas pessoais ============ */
+/* ============ estatísticas pessoais + comparação com amigos ============ */
+var CHAVE_CODIGO_JOGADOR = "tugle:codigo-jogador";
+function gerarCodigo(){
+  var letras = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", c = "";
+  for (var i=0;i<6;i++) c += letras[Math.floor(Math.random()*letras.length)];
+  return c;
+}
+async function obterCodigoProprio(){
+  var c = await loja.get(CHAVE_CODIGO_JOGADOR);
+  if (!c){ c = gerarCodigo(); await loja.set(CHAVE_CODIGO_JOGADOR, c); }
+  return c;
+}
+async function enviarEstatisticasProprias(total, semAjuda, streak){
+  try {
+    var codigo = await obterCodigoProprio();
+    await fetch(baseURL() + "/jogador/" + codigo, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: "Jogador", total: total, sem_ajuda: semAjuda, streak: streak }),
+    });
+  } catch(e){ /* falha silenciosa — não é crítico para a experiência */ }
+}
 async function mostrarEstatisticas(){
   var dados = await concluidosGuardados();
   var ids = Object.keys(dados);
   var total = ids.length;
   var semAjuda = ids.filter(function(k){ return dados[k] === true; }).length;
+  var taxa = total ? Math.round((semAjuda/total)*100) : 0;
   var streak = await calcularStreak();
 
   var linhas = [];
-  linhas.push('<div style="font-size:32px;font-family:var(--serif);color:var(--carvao);margin-bottom:2px">' + total + '</div>');
-  linhas.push('<div style="margin-bottom:16px">puzzle' + (total===1?'':'s') + ' resolvido' + (total===1?'':'s') + '</div>');
-  linhas.push('<div style="font-size:32px;font-family:var(--serif);color:var(--acento);margin-bottom:2px">' + semAjuda + '</div>');
-  linhas.push('<div style="margin-bottom:16px">sem ajuda nenhuma</div>');
-  linhas.push('<div style="font-size:32px;font-family:var(--serif);color:var(--carvao);margin-bottom:2px">' + streak + '</div>');
-  linhas.push('<div>dia' + (streak===1?'':'s') + ' seguido' + (streak===1?'':'s') + (streak>0?' agora':'') + '</div>');
+  linhas.push('<div style="display:flex;gap:14px;text-align:center;margin-bottom:16px">');
+  linhas.push('<div style="flex:1"><div style="font-size:28px;font-family:var(--serif);color:var(--carvao)">'+total+'</div><div style="font-size:12px">resolvido'+(total===1?'':'s')+'</div></div>');
+  linhas.push('<div style="flex:1"><div style="font-size:28px;font-family:var(--serif);color:var(--acento)">'+taxa+'%</div><div style="font-size:12px">taxa de acerto</div></div>');
+  linhas.push('<div style="flex:1"><div style="font-size:28px;font-family:var(--serif);color:var(--carvao)">'+streak+'</div><div style="font-size:12px">dia'+(streak===1?'':'s')+' seguido'+(streak===1?'':'s')+'</div></div>');
+  linhas.push('</div>');
+  linhas.push('<p class="ajuda" style="margin:0">Taxa de acerto = puzzles resolvidos sem nenhuma ajuda, sobre o total resolvido.</p>');
 
   el("#conteudo-estatisticas").innerHTML = linhas.join("");
+  el("#codigo-jogador").textContent = await obterCodigoProprio();
+  el("#resultado-comparacao").innerHTML = "";
   el("#cortina-estatisticas").classList.add("aberta");
   el("#estatisticas").classList.add("aberta");
+  enviarEstatisticasProprias(total, semAjuda, streak);
 }
 function fecharEstatisticas(){
   el("#cortina-estatisticas").classList.remove("aberta");
   el("#estatisticas").classList.remove("aberta");
 }
 el("#b-abrir-estatisticas").onclick = mostrarEstatisticas;
+el("#b-tema-estatisticas").onclick = mostrarEstatisticas;
 el("#b-fechar-estatisticas").onclick = fecharEstatisticas;
 el("#cortina-estatisticas").onclick = fecharEstatisticas;
+el("#b-copiar-codigo").onclick = async function(){
+  var codigo = await obterCodigoProprio();
+  if (navigator.clipboard) navigator.clipboard.writeText(codigo).then(function(){
+    var b = el("#b-copiar-codigo"); var original = b.textContent;
+    b.textContent = "Copiado!"; setTimeout(function(){ b.textContent = original; }, 1500);
+  });
+};
+el("#b-comparar-amigo").onclick = async function(){
+  var caixa = el("#resultado-comparacao");
+  var codigoAmigo = (el("#input-codigo-amigo").value || "").trim().toUpperCase();
+  if (!codigoAmigo){ caixa.innerHTML = '<div class="aviso neutro">Escreve o código do teu amigo.</div>'; return; }
+  var codigoProprio = await obterCodigoProprio();
+  if (codigoAmigo === codigoProprio){ caixa.innerHTML = '<div class="aviso neutro">Esse é o teu próprio código.</div>'; return; }
+  caixa.innerHTML = '<div class="aviso neutro">A comparar…</div>';
+  try {
+    var dados = await concluidosGuardados();
+    var ids = Object.keys(dados);
+    var meuTotal = ids.length;
+    var meuSemAjuda = ids.filter(function(k){ return dados[k] === true; }).length;
+    var meuStreak = await calcularStreak();
+
+    var r = await fetch(baseURL() + "/jogador/" + codigoAmigo);
+    if (r.status === 404){ caixa.innerHTML = '<div class="aviso mau">Não encontrei nenhum jogador com esse código. Ele já abriu as estatísticas dele pelo menos uma vez?</div>'; return; }
+    if (!r.ok) throw new Error("estado " + r.status);
+    var amigo = await r.json();
+
+    function linha(rotulo, meu, dele){
+      var euGanho = meu > dele, empate = meu === dele;
+      var corMeu = euGanho ? "var(--acento)" : "rgba(var(--tinta-rgb),.75)";
+      var corDele = (!euGanho && !empate) ? "var(--acento)" : "rgba(var(--tinta-rgb),.75)";
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--linha)">'
+        + '<span style="font-weight:700;color:'+corMeu+'">'+meu+'</span>'
+        + '<span style="font-size:11px;color:rgba(var(--tinta-rgb),.5);text-transform:uppercase;letter-spacing:.06em">'+rotulo+'</span>'
+        + '<span style="font-weight:700;color:'+corDele+'">'+dele+'</span></div>';
+    }
+    var html = '<div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(var(--tinta-rgb),.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">'
+      + '<span>Tu</span><span>' + (amigo.nome || "Amigo") + '</span></div>';
+    html += linha("resolvidos", meuTotal, amigo.total);
+    html += linha("sem ajuda", meuSemAjuda, amigo.sem_ajuda);
+    html += linha("sequência", meuStreak, amigo.streak);
+    caixa.innerHTML = html;
+  } catch(e){
+    caixa.innerHTML = '<div class="aviso mau">Não consegui comparar agora. Tenta outra vez.</div>';
+  }
+};
 
 /* ============ boas-vindas (primeira visita) ============ */
 (async function(){
@@ -1582,6 +1655,25 @@ el("#cortina-boas-vindas").onclick = function(){ el("#b-fechar-boas-vindas").cli
     el("#fita-dia").insertAdjacentElement("afterend", span);
   }
 })();
+
+/* ============ badge do arquivo: quantos dias por jogar ============ */
+async function atualizarBadgeArquivo(){
+  var badge = el("#badge-arquivo");
+  try {
+    var r = await fetch(baseURL() + "/puzzles");
+    if (!r.ok) throw new Error("estado " + r.status);
+    var itens = await r.json();
+    var concluidos = await concluidosGuardados();
+    var porJogar = itens.filter(function(item){ return !(item.data in concluidos); }).length;
+    if (porJogar > 0){
+      badge.textContent = porJogar > 99 ? "99+" : String(porJogar);
+      badge.style.display = "inline-block";
+    } else {
+      badge.style.display = "none";
+    }
+  } catch(e){ badge.style.display = "none"; }
+}
+atualizarBadgeArquivo();
 
 /* ============ arranque ============ */
 (async function(){

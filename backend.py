@@ -37,6 +37,7 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel
 from sqlalchemy import Integer, String, select
 from sqlalchemy import JSON
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -158,6 +159,12 @@ async def limitar_puzzle_stream(request: Request) -> None:
     ip = request.client.host if request.client else "desconhecido"
     if limite_excedido(f"stream:{ip}", maximo=20, janela_segundos=300):
         raise HTTPException(429, "Demasiados pedidos em pouco tempo. Espera um pouco antes de gerares outro jogo.")
+
+
+async def limitar_jogador(request: Request) -> None:
+    ip = request.client.host if request.client else "desconhecido"
+    if limite_excedido(f"jogador:{ip}", maximo=30, janela_segundos=300):
+        raise HTTPException(429, "Demasiados pedidos em pouco tempo.")
 
 
 # A Deezer recorta os 30s de antevisão a começar algures na música, muitas
@@ -416,6 +423,21 @@ class PuzzleGuardado(Base):
     __tablename__ = "puzzles"
     data: Mapped[str] = mapped_column(String, primary_key=True)  # AAAA-MM-DD
     conteudo: Mapped[dict] = mapped_column(JSON)
+
+
+class Jogador(Base):
+    """Estatísticas públicas e leves para comparação entre amigos — sem
+    contas, sem password. Cada pessoa tem um código curto gerado no
+    próprio dispositivo (guardado em localStorage) que pode partilhar;
+    quem tiver o código consegue ver as estatísticas, tal como um
+    perfil público de jogo. Não guarda nada sensível."""
+    __tablename__ = "jogadores"
+    codigo: Mapped[str] = mapped_column(String, primary_key=True)
+    nome: Mapped[str] = mapped_column(String, default="Jogador")
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    sem_ajuda: Mapped[int] = mapped_column(Integer, default=0)
+    streak: Mapped[int] = mapped_column(Integer, default=0)
+    atualizado_em: Mapped[str] = mapped_column(String, default="")
 
 
 engine = create_async_engine(BASE_DE_DADOS, connect_args=_connect_args)
@@ -1527,6 +1549,49 @@ async def puzzle_por_data(data: str) -> dict:
     if puzzle_desatualizado(conteudo):
         conteudo = await gerar_e_guardar(d)
     return para_cliente(conteudo)
+
+
+class DadosJogador(BaseModel):
+    nome: str = "Jogador"
+    total: int = 0
+    sem_ajuda: int = 0
+    streak: int = 0
+
+
+@app.post("/jogador/{codigo}")
+async def guardar_jogador(codigo: str, dados: DadosJogador, _: None = Depends(limitar_jogador)) -> dict:
+    codigo = codigo.strip().upper()
+    if not (4 <= len(codigo) <= 12) or not codigo.isalnum():
+        raise HTTPException(400, "Código inválido — usa entre 4 e 12 letras/números.")
+    nome = (dados.nome or "Jogador").strip()[:24] or "Jogador"
+    async with Sessao() as sessao:
+        jogador = await sessao.get(Jogador, codigo)
+        if not jogador:
+            jogador = Jogador(codigo=codigo)
+            sessao.add(jogador)
+        jogador.nome = nome
+        jogador.total = max(0, dados.total)
+        jogador.sem_ajuda = max(0, dados.sem_ajuda)
+        jogador.streak = max(0, dados.streak)
+        jogador.atualizado_em = dt.datetime.now(dt.timezone.utc).isoformat()
+        await sessao.commit()
+    return {"ok": True}
+
+
+@app.get("/jogador/{codigo}")
+async def obter_jogador(codigo: str, _: None = Depends(limitar_jogador)) -> dict:
+    codigo = codigo.strip().upper()
+    async with Sessao() as sessao:
+        jogador = await sessao.get(Jogador, codigo)
+    if not jogador:
+        raise HTTPException(404, "Não existe nenhum jogador com este código.")
+    return {
+        "codigo": jogador.codigo,
+        "nome": jogador.nome,
+        "total": jogador.total,
+        "sem_ajuda": jogador.sem_ajuda,
+        "streak": jogador.streak,
+    }
 
 
 @app.get("/catalogo/resumo")
