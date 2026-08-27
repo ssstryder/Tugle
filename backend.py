@@ -40,7 +40,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
-from sqlalchemy import Integer, String, select
+from sqlalchemy import Integer, String, delete, select
 from sqlalchemy import JSON
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -453,6 +453,18 @@ class Jogador(Base):
     sem_ajuda: Mapped[int] = mapped_column(Integer, default=0)
     streak: Mapped[int] = mapped_column(Integer, default=0)
     atualizado_em: Mapped[str] = mapped_column(String, default="")
+
+
+class Amizade(Base):
+    """Uma direcção de uma amizade. Cada amizade guarda duas linhas
+    (A→B e B→A), criadas e apagadas sempre em conjunto, para que quem
+    adiciona apareça também na lista de quem foi adicionado. Ao contrário
+    da versão antiga, que só vivia no localStorage de cada dispositivo,
+    isto sobrevive a mudar de browser e é igual dos dois lados."""
+    __tablename__ = "amizades"
+    codigo: Mapped[str] = mapped_column(String, primary_key=True)
+    amigo: Mapped[str] = mapped_column(String, primary_key=True)
+    criada_em: Mapped[str] = mapped_column(String, default="")
 
 
 class Conta(Base):
@@ -1658,6 +1670,88 @@ async def obter_jogador(codigo: str, _: None = Depends(limitar_jogador)) -> dict
         "sem_ajuda": jogador.sem_ajuda,
         "streak": jogador.streak,
     }
+
+
+# ------------------------------------------------------------- amizades
+
+def _validar_codigo(codigo: str) -> str:
+    codigo = (codigo or "").strip().upper()
+    if not (4 <= len(codigo) <= 12) or not codigo.isalnum():
+        raise HTTPException(400, "Código inválido — usa entre 4 e 12 letras/números.")
+    return codigo
+
+
+class DadosAmizade(BaseModel):
+    codigo: str
+    amigo: str
+
+
+@app.post("/amizade")
+async def criar_amizade(dados: DadosAmizade, _: None = Depends(limitar_jogador)) -> dict:
+    """Cria as duas direcções de uma vez. Quem adiciona passa a aparecer
+    na lista de quem foi adicionado, e vice-versa."""
+    codigo = _validar_codigo(dados.codigo)
+    amigo = _validar_codigo(dados.amigo)
+    if codigo == amigo:
+        raise HTTPException(400, "Esse é o teu próprio código.")
+    agora = dt.datetime.now(dt.timezone.utc).isoformat()
+    async with Sessao() as sessao:
+        # o outro jogador tem de existir; o próprio é criado se ainda não existir,
+        # para nunca ficar uma amizade a apontar para um código sem linha
+        if not await sessao.get(Jogador, amigo):
+            raise HTTPException(404, "Não existe nenhum jogador com este código.")
+        if not await sessao.get(Jogador, codigo):
+            sessao.add(Jogador(codigo=codigo, atualizado_em=agora))
+        for a, b in ((codigo, amigo), (amigo, codigo)):
+            if not await sessao.get(Amizade, (a, b)):
+                sessao.add(Amizade(codigo=a, amigo=b, criada_em=agora))
+        await sessao.commit()
+    return {"ok": True}
+
+
+@app.delete("/amizade")
+async def apagar_amizade(dados: DadosAmizade, _: None = Depends(limitar_jogador)) -> dict:
+    """Apaga as duas direcções — se um remove o outro, deixam de se ver
+    mutuamente. É o preço de a lista ser simétrica."""
+    codigo = _validar_codigo(dados.codigo)
+    amigo = _validar_codigo(dados.amigo)
+    async with Sessao() as sessao:
+        await sessao.execute(
+            delete(Amizade).where(
+                Amizade.codigo.in_([codigo, amigo]),
+                Amizade.amigo.in_([codigo, amigo]),
+            )
+        )
+        await sessao.commit()
+    return {"ok": True}
+
+
+@app.get("/amizade/{codigo}")
+async def listar_amizades(codigo: str, _: None = Depends(limitar_jogador)) -> list[dict]:
+    """A lista de amigos já com as estatísticas de cada um, para o
+    cliente só precisar de um pedido em vez de um por amigo."""
+    codigo = _validar_codigo(codigo)
+    async with Sessao() as sessao:
+        resultado = await sessao.execute(
+            select(Amizade.amigo).where(Amizade.codigo == codigo)
+        )
+        codigos = list(resultado.scalars().all())
+        if not codigos:
+            return []
+        resultado = await sessao.execute(
+            select(Jogador).where(Jogador.codigo.in_(codigos))
+        )
+        jogadores = {j.codigo: j for j in resultado.scalars().all()}
+    return [
+        {
+            "codigo": c,
+            "nome": jogadores[c].nome if c in jogadores else c,
+            "total": jogadores[c].total if c in jogadores else 0,
+            "sem_ajuda": jogadores[c].sem_ajuda if c in jogadores else 0,
+            "streak": jogadores[c].streak if c in jogadores else 0,
+        }
+        for c in codigos
+    ]
 
 
 # ---------------------------------------------------------------- contas

@@ -1728,16 +1728,53 @@ async function enviarEstatisticasProprias(total, semAjuda, streak){
     });
   } catch(e){ /* falha silenciosa — não é crítico para a experiência */ }
 }
-async function obterAmigos(){
+/* A lista de amigos passou a viver no servidor e a ser simétrica: quem te
+   adiciona aparece automaticamente na tua lista. O localStorage fica só
+   como cache, para a tabela não ficar vazia se o servidor não responder. */
+async function amigosEmCache(){
   var s = await loja.get(CHAVE_AMIGOS);
   if (!s) return [];
   try { var l = JSON.parse(s); return Array.isArray(l) ? l : []; } catch(e){ return []; }
 }
 async function guardarAmigos(lista){ await loja.set(CHAVE_AMIGOS, JSON.stringify(lista)); }
+
+var CHAVE_AMIGOS_MIGRADOS = "tugle:amigos-migrados";
+async function migrarAmigosLocais(codigo){
+  // quem já tinha amigos guardados no browser antes desta mudança
+  if (await loja.get(CHAVE_AMIGOS_MIGRADOS)) return;
+  var antigos = await amigosEmCache();
+  for (var i=0;i<antigos.length;i++){
+    try {
+      await fetch(baseURL() + "/amizade", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codigo: codigo, amigo: antigos[i].codigo }),
+      });
+    } catch(e){ return; } // sem rede: tenta outra vez para a próxima
+  }
+  await loja.set(CHAVE_AMIGOS_MIGRADOS, "1");
+}
+
+async function obterAmigos(){
+  var codigo = await obterCodigoProprio();
+  await migrarAmigosLocais(codigo);
+  try {
+    var r = await fetch(baseURL() + "/amizade/" + encodeURIComponent(codigo));
+    if (!r.ok) throw new Error("estado " + r.status);
+    var lista = await r.json();
+    await guardarAmigos(lista);
+    return lista;
+  } catch(e){
+    return await amigosEmCache(); // offline — mostra o que estava guardado
+  }
+}
 async function removerAmigo(codigo){
-  var lista = await obterAmigos();
-  lista = lista.filter(function(a){ return a.codigo !== codigo; });
-  await guardarAmigos(lista);
+  var meu = await obterCodigoProprio();
+  try {
+    await fetch(baseURL() + "/amizade", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ codigo: meu, amigo: codigo }),
+    });
+  } catch(e){}
   await renderListaAmigos();
 }
 async function renderListaAmigos(){
@@ -1748,25 +1785,20 @@ async function renderListaAmigos(){
   var meuSemAjuda = ids.filter(function(k){ return dados[k] === true; }).length;
   var meuStreak = await calcularStreak();
   var meuCodigo = await obterCodigoProprio();
+  caixa.innerHTML = '<div class="aviso neutro">A carregar…</div>';
   var amigos = await obterAmigos();
 
   if (!amigos.length){
-    caixa.innerHTML = '<div class="aviso neutro">Ainda não adicionaste nenhum amigo.</div>';
+    caixa.innerHTML = '<div class="aviso neutro">Ainda não tens amigos na lista. Partilha o teu código ou adiciona alguém pelo código dele.</div>';
     return;
   }
-  caixa.innerHTML = '<div class="aviso neutro">A carregar…</div>';
 
+  // o /amizade/{codigo} já devolve as estatísticas de cada um — não é preciso um pedido por amigo
   var linhas = [{ codigo: meuCodigo, apelido: "Tu", eu: true, total: meuTotal, sem_ajuda: meuSemAjuda, streak: meuStreak }];
-  var resultados = await Promise.all(amigos.map(async function(a){
-    try {
-      var r = await fetch(baseURL() + "/jogador/" + a.codigo);
-      if (!r.ok) return { codigo: a.codigo, apelido: a.apelido, erro: true };
-      var dados = await r.json();
-      return { codigo: a.codigo, apelido: a.apelido || dados.nome || a.codigo,
-        total: dados.total, sem_ajuda: dados.sem_ajuda, streak: dados.streak };
-    } catch(e){ return { codigo: a.codigo, apelido: a.apelido, erro: true }; }
+  linhas = linhas.concat(amigos.map(function(a){
+    return { codigo: a.codigo, apelido: a.nome || a.apelido || a.codigo,
+      total: a.total || 0, sem_ajuda: a.sem_ajuda || 0, streak: a.streak || 0 };
   }));
-  linhas = linhas.concat(resultados);
   linhas.sort(function(a,b){
     if (a.eu) return -1; if (b.eu) return 1; // "Tu" fica sempre no topo
     return (b.total||0) - (a.total||0);
@@ -1844,12 +1876,12 @@ el("#b-adicionar-amigo").onclick = async function(){
   if (amigos.some(function(a){ return a.codigo === codigoAmigo; })){ aviso.textContent = "Já tens esse amigo na lista."; return; }
   aviso.textContent = "A verificar…";
   try {
-    var r = await fetch(baseURL() + "/jogador/" + codigoAmigo);
-    if (r.status === 404){ aviso.textContent = "Não encontrei nenhum jogador com esse código. Ele já abriu as estatísticas dele pelo menos uma vez?"; return; }
+    var r = await fetch(baseURL() + "/amizade", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ codigo: codigoProprio, amigo: codigoAmigo }),
+    });
+    if (r.status === 404){ aviso.textContent = "Não encontrei nenhum jogador com esse código. Ele já abriu a conta dele pelo menos uma vez?"; return; }
     if (!r.ok) throw new Error("estado " + r.status);
-    var dadosAmigo = await r.json();
-    amigos.push({ codigo: codigoAmigo, apelido: dadosAmigo.nome || codigoAmigo });
-    await guardarAmigos(amigos);
     el("#input-codigo-amigo").value = "";
     aviso.textContent = "";
     await renderListaAmigos();
