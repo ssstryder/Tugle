@@ -523,24 +523,29 @@
 </div>
 
 <div class="cortina" id="cortina-estatisticas"></div>
-<div class="boas-vindas" id="estatisticas" style="width:360px">
+<div class="boas-vindas" id="estatisticas" style="width:380px">
   <h2>As tuas estatísticas</h2>
   <div id="conteudo-estatisticas" style="font-size:14px;line-height:1.7;color:rgba(var(--tinta-rgb),.75);margin-bottom:18px"></div>
 
   <div style="border-top:1px solid var(--linha);padding-top:16px;margin-bottom:16px">
-    <div style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5);margin-bottom:10px">Comparar com amigos</div>
-    <p class="ajuda" style="margin:0 0 10px">O teu código — partilha-o para amigos verem as tuas estatísticas.</p>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+    <div style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5);margin-bottom:10px">Os teus amigos</div>
+    <p class="ajuda" style="margin:0 0 10px">O teu código — partilha-o para amigos te adicionarem.</p>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
       <code id="codigo-jogador" style="flex:1;background:rgba(var(--tinta-rgb),.06);padding:9px 10px;border-radius:3px;font:600 15px/1 var(--mono);letter-spacing:.06em;text-align:center">------</code>
       <button class="btn suave" id="b-copiar-codigo" style="width:auto;white-space:nowrap">Copiar</button>
     </div>
-    <p class="ajuda" style="margin:0 0 8px">Tens o código de um amigo? Compara aqui:</p>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
+
+    <p class="ajuda" style="margin:0 0 8px">Adicionar um amigo pelo código dele:</p>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
       <input id="input-codigo-amigo" placeholder="CÓDIGO" maxlength="12"
-        style="flex:1;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:600 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase">
-      <button class="btn suave" id="b-comparar-amigo" style="width:auto;white-space:nowrap">Comparar</button>
+        style="flex:1.1;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:600 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase">
+      <input id="input-apelido-amigo" placeholder="Nome (opcional)" maxlength="24"
+        style="flex:1;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">
+      <button class="btn suave" id="b-adicionar-amigo" style="width:auto;white-space:nowrap">Adicionar</button>
     </div>
-    <div id="resultado-comparacao" style="font-size:13.5px;line-height:1.6"></div>
+    <div id="aviso-amigo" style="font-size:12.5px;margin-bottom:4px"></div>
+
+    <div id="lista-amigos" style="margin-top:12px"></div>
   </div>
 
   <button class="btn primario" id="b-fechar-estatisticas">Fechar</button>
@@ -1530,8 +1535,9 @@ document.addEventListener("keydown", function(ev){
   };
 })();
 
-/* ============ estatísticas pessoais + comparação com amigos ============ */
+/* ============ estatísticas pessoais + lista de amigos ============ */
 var CHAVE_CODIGO_JOGADOR = "tugle:codigo-jogador";
+var CHAVE_AMIGOS = "tugle:amigos";
 function gerarCodigo(){
   var letras = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", c = "";
   for (var i=0;i<6;i++) c += letras[Math.floor(Math.random()*letras.length)];
@@ -1551,6 +1557,74 @@ async function enviarEstatisticasProprias(total, semAjuda, streak){
     });
   } catch(e){ /* falha silenciosa — não é crítico para a experiência */ }
 }
+async function obterAmigos(){
+  var s = await loja.get(CHAVE_AMIGOS);
+  if (!s) return [];
+  try { var l = JSON.parse(s); return Array.isArray(l) ? l : []; } catch(e){ return []; }
+}
+async function guardarAmigos(lista){ await loja.set(CHAVE_AMIGOS, JSON.stringify(lista)); }
+async function removerAmigo(codigo){
+  var lista = await obterAmigos();
+  lista = lista.filter(function(a){ return a.codigo !== codigo; });
+  await guardarAmigos(lista);
+  await renderListaAmigos();
+}
+async function renderListaAmigos(){
+  var caixa = el("#lista-amigos");
+  var dados = await concluidosGuardados();
+  var ids = Object.keys(dados);
+  var meuTotal = ids.length;
+  var meuSemAjuda = ids.filter(function(k){ return dados[k] === true; }).length;
+  var meuStreak = await calcularStreak();
+  var meuCodigo = await obterCodigoProprio();
+  var amigos = await obterAmigos();
+
+  if (!amigos.length){
+    caixa.innerHTML = '<div class="aviso neutro">Ainda não adicionaste nenhum amigo.</div>';
+    return;
+  }
+  caixa.innerHTML = '<div class="aviso neutro">A carregar…</div>';
+
+  var linhas = [{ codigo: meuCodigo, apelido: "Tu", eu: true, total: meuTotal, sem_ajuda: meuSemAjuda, streak: meuStreak }];
+  var resultados = await Promise.all(amigos.map(async function(a){
+    try {
+      var r = await fetch(baseURL() + "/jogador/" + a.codigo);
+      if (!r.ok) return { codigo: a.codigo, apelido: a.apelido, erro: true };
+      var dados = await r.json();
+      return { codigo: a.codigo, apelido: a.apelido || dados.nome || a.codigo,
+        total: dados.total, sem_ajuda: dados.sem_ajuda, streak: dados.streak };
+    } catch(e){ return { codigo: a.codigo, apelido: a.apelido, erro: true }; }
+  }));
+  linhas = linhas.concat(resultados);
+  linhas.sort(function(a,b){
+    if (a.eu) return -1; if (b.eu) return 1; // "Tu" fica sempre no topo
+    return (b.total||0) - (a.total||0);
+  });
+
+  var html = '<div style="display:flex;font-size:10.5px;color:rgba(var(--tinta-rgb),.45);text-transform:uppercase;letter-spacing:.06em;padding:0 0 6px;border-bottom:1px solid var(--linha)">'
+    + '<span style="flex:1">Nome</span><span style="width:34px;text-align:center">Res.</span>'
+    + '<span style="width:34px;text-align:center">S/aj.</span><span style="width:34px;text-align:center">Seq.</span><span style="width:22px"></span></div>';
+  linhas.forEach(function(l){
+    if (l.erro){
+      html += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--linha);font-size:13px;color:rgba(var(--tinta-rgb),.45)">'
+        + '<span style="flex:1">' + (l.apelido || l.codigo) + ' — código inválido</span>'
+        + '<button data-remover="'+l.codigo+'" style="width:22px;border:0;background:none;color:rgba(var(--tinta-rgb),.4);cursor:pointer;font-size:15px">×</button></div>';
+      return;
+    }
+    var estilo = l.eu ? "font-weight:700;color:var(--acento)" : "color:var(--carvao)";
+    html += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--linha);font-size:13.5px;'+estilo+'">'
+      + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (l.apelido || l.codigo) + '</span>'
+      + '<span style="width:34px;text-align:center">' + l.total + '</span>'
+      + '<span style="width:34px;text-align:center">' + l.sem_ajuda + '</span>'
+      + '<span style="width:34px;text-align:center">' + l.streak + '</span>'
+      + '<span style="width:22px;text-align:center">' + (l.eu ? '' : '<button data-remover="'+l.codigo+'" style="border:0;background:none;color:rgba(var(--tinta-rgb),.35);cursor:pointer;font-size:15px">×</button>') + '</span>'
+      + '</div>';
+  });
+  caixa.innerHTML = html;
+  caixa.querySelectorAll("[data-remover]").forEach(function(b){
+    b.onclick = function(){ removerAmigo(b.dataset.remover); };
+  });
+}
 async function mostrarEstatisticas(){
   var dados = await concluidosGuardados();
   var ids = Object.keys(dados);
@@ -1569,10 +1643,11 @@ async function mostrarEstatisticas(){
 
   el("#conteudo-estatisticas").innerHTML = linhas.join("");
   el("#codigo-jogador").textContent = await obterCodigoProprio();
-  el("#resultado-comparacao").innerHTML = "";
+  el("#aviso-amigo").textContent = "";
   el("#cortina-estatisticas").classList.add("aberta");
   el("#estatisticas").classList.add("aberta");
   enviarEstatisticasProprias(total, semAjuda, streak);
+  renderListaAmigos();
 }
 function fecharEstatisticas(){
   el("#cortina-estatisticas").classList.remove("aberta");
@@ -1589,42 +1664,29 @@ el("#b-copiar-codigo").onclick = async function(){
     b.textContent = "Copiado!"; setTimeout(function(){ b.textContent = original; }, 1500);
   });
 };
-el("#b-comparar-amigo").onclick = async function(){
-  var caixa = el("#resultado-comparacao");
+el("#b-adicionar-amigo").onclick = async function(){
+  var aviso = el("#aviso-amigo");
   var codigoAmigo = (el("#input-codigo-amigo").value || "").trim().toUpperCase();
-  if (!codigoAmigo){ caixa.innerHTML = '<div class="aviso neutro">Escreve o código do teu amigo.</div>'; return; }
+  var apelido = (el("#input-apelido-amigo").value || "").trim();
+  aviso.style.color = "";
+  if (!codigoAmigo){ aviso.textContent = "Escreve o código do teu amigo."; return; }
   var codigoProprio = await obterCodigoProprio();
-  if (codigoAmigo === codigoProprio){ caixa.innerHTML = '<div class="aviso neutro">Esse é o teu próprio código.</div>'; return; }
-  caixa.innerHTML = '<div class="aviso neutro">A comparar…</div>';
+  if (codigoAmigo === codigoProprio){ aviso.textContent = "Esse é o teu próprio código."; return; }
+  var amigos = await obterAmigos();
+  if (amigos.some(function(a){ return a.codigo === codigoAmigo; })){ aviso.textContent = "Já tens esse amigo na lista."; return; }
+  aviso.textContent = "A verificar…";
   try {
-    var dados = await concluidosGuardados();
-    var ids = Object.keys(dados);
-    var meuTotal = ids.length;
-    var meuSemAjuda = ids.filter(function(k){ return dados[k] === true; }).length;
-    var meuStreak = await calcularStreak();
-
     var r = await fetch(baseURL() + "/jogador/" + codigoAmigo);
-    if (r.status === 404){ caixa.innerHTML = '<div class="aviso mau">Não encontrei nenhum jogador com esse código. Ele já abriu as estatísticas dele pelo menos uma vez?</div>'; return; }
+    if (r.status === 404){ aviso.textContent = "Não encontrei nenhum jogador com esse código. Ele já abriu as estatísticas dele pelo menos uma vez?"; return; }
     if (!r.ok) throw new Error("estado " + r.status);
-    var amigo = await r.json();
-
-    function linha(rotulo, meu, dele){
-      var euGanho = meu > dele, empate = meu === dele;
-      var corMeu = euGanho ? "var(--acento)" : "rgba(var(--tinta-rgb),.75)";
-      var corDele = (!euGanho && !empate) ? "var(--acento)" : "rgba(var(--tinta-rgb),.75)";
-      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--linha)">'
-        + '<span style="font-weight:700;color:'+corMeu+'">'+meu+'</span>'
-        + '<span style="font-size:11px;color:rgba(var(--tinta-rgb),.5);text-transform:uppercase;letter-spacing:.06em">'+rotulo+'</span>'
-        + '<span style="font-weight:700;color:'+corDele+'">'+dele+'</span></div>';
-    }
-    var html = '<div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(var(--tinta-rgb),.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">'
-      + '<span>Tu</span><span>' + (amigo.nome || "Amigo") + '</span></div>';
-    html += linha("resolvidos", meuTotal, amigo.total);
-    html += linha("sem ajuda", meuSemAjuda, amigo.sem_ajuda);
-    html += linha("sequência", meuStreak, amigo.streak);
-    caixa.innerHTML = html;
+    var dadosAmigo = await r.json();
+    amigos.push({ codigo: codigoAmigo, apelido: apelido || dadosAmigo.nome || codigoAmigo });
+    await guardarAmigos(amigos);
+    el("#input-codigo-amigo").value = ""; el("#input-apelido-amigo").value = "";
+    aviso.textContent = "";
+    await renderListaAmigos();
   } catch(e){
-    caixa.innerHTML = '<div class="aviso mau">Não consegui comparar agora. Tenta outra vez.</div>';
+    aviso.textContent = "Não consegui adicionar agora. Tenta outra vez.";
   }
 };
 
