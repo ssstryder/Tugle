@@ -54,6 +54,8 @@
   .btn:hover{background:var(--acento);border-color:var(--acento)}
   .btn.contorno{background:#9146FF;color:#fff;border-color:#9146FF}
   .btn.contorno:hover{background:#7c3aed;border-color:#7c3aed;color:#fff}
+  .btn.vazio{background:transparent;color:var(--carvao);border-color:var(--linha-forte)}
+  .btn.vazio:hover{background:transparent;border-color:var(--carvao);color:var(--carvao)}
   .botoes{display:flex;gap:10px;flex-wrap:wrap}
   .nota{margin:16px 0 0;font-size:13px;color:rgba(var(--tinta-rgb),.5)}
   footer{display:flex;align-items:center;gap:10px;padding:24px 20px;max-width:640px;
@@ -93,9 +95,11 @@
   <p class="linha">Palavras cruzadas com música portuguesa. Ouve o excerto, escreve o que reconheces.</p>
   <div class="botoes">
     <a class="btn" href="/jogar">Começar</a>
+    <a class="btn vazio" href="/jogar#conta">Entrar</a>
     <a class="btn contorno" href="/stream">Jogar em stream</a>
   </div>
-  <p class="nota">Um puzzle novo todos os dias, à meia-noite.</p>
+  <p class="nota">Um puzzle novo todos os dias, à meia-noite.<br>
+    Inicia sessão para levares o teu código, estatísticas e amigos para qualquer dispositivo.</p>
 </div>
 
 <footer>
