@@ -1741,27 +1741,32 @@ async function guardarAmigos(lista){ await loja.set(CHAVE_AMIGOS, JSON.stringify
 var CHAVE_AMIGOS_MIGRADOS = "tugle:amigos-migrados";
 async function migrarAmigosLocais(codigo){
   // quem já tinha amigos guardados no browser antes desta mudança
-  if (await loja.get(CHAVE_AMIGOS_MIGRADOS)) return;
+  if (await loja.get(CHAVE_AMIGOS_MIGRADOS)) return true;
   var antigos = await amigosEmCache();
   for (var i=0;i<antigos.length;i++){
     try {
-      await fetch(baseURL() + "/amizade", {
+      var r = await fetch(baseURL() + "/amizade", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ codigo: codigo, amigo: antigos[i].codigo }),
       });
-    } catch(e){ return; } // sem rede: tenta outra vez para a próxima
+      // 404 = esse código já não existe; não vale a pena voltar a tentar
+      if (!r.ok && r.status !== 404 && r.status !== 400) return false;
+    } catch(e){ return false; } // sem rede: tenta outra vez para a próxima
   }
   await loja.set(CHAVE_AMIGOS_MIGRADOS, "1");
+  return true;
 }
 
 async function obterAmigos(){
   var codigo = await obterCodigoProprio();
-  await migrarAmigosLocais(codigo);
+  var migrado = await migrarAmigosLocais(codigo);
   try {
     var r = await fetch(baseURL() + "/amizade/" + encodeURIComponent(codigo));
     if (!r.ok) throw new Error("estado " + r.status);
     var lista = await r.json();
-    await guardarAmigos(lista);
+    // só substitui a cache depois da migração estar feita, senão apagava
+    // amigos antigos que ainda não chegaram ao servidor
+    if (migrado) await guardarAmigos(lista);
     return lista;
   } catch(e){
     return await amigosEmCache(); // offline — mostra o que estava guardado
@@ -1944,6 +1949,7 @@ atualizarBadgeArquivo();
   await carregarConta();
   atualizarBotaoConta();
   await puxarProgressoDaConta(); // antes de carregar o puzzle, para já vir preenchido
+  migrarAmigosLocais(await obterCodigoProprio()); // envia amigos antigos do browser para o servidor
 
   var cfg = await loja.get(CHAVE_CFG);
   if (cfg){ try { config = JSON.parse(cfg); } catch(e){} }
