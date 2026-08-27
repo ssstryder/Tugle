@@ -22,6 +22,7 @@ import datetime as dt
 import os
 import random
 import re
+import secrets
 import time
 import unicodedata
 from collections import defaultdict
@@ -31,6 +32,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+import bcrypt
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -165,6 +167,13 @@ async def limitar_jogador(request: Request) -> None:
     ip = request.client.host if request.client else "desconhecido"
     if limite_excedido(f"jogador:{ip}", maximo=30, janela_segundos=300):
         raise HTTPException(429, "Demasiados pedidos em pouco tempo.")
+
+
+async def limitar_conta(request: Request) -> None:
+    ip = request.client.host if request.client else "desconhecido"
+    # mais apertado do que o limitador geral — são endpoints com password
+    if limite_excedido(f"conta:{ip}", maximo=10, janela_segundos=300):
+        raise HTTPException(429, "Demasiadas tentativas em pouco tempo. Espera uns minutos.")
 
 
 # A Deezer recorta os 30s de antevisão a começar algures na música, muitas
@@ -438,6 +447,30 @@ class Jogador(Base):
     sem_ajuda: Mapped[int] = mapped_column(Integer, default=0)
     streak: Mapped[int] = mapped_column(Integer, default=0)
     atualizado_em: Mapped[str] = mapped_column(String, default="")
+
+
+class Conta(Base):
+    """Conta real (email + password), para a identidade e o código
+    sobreviverem a limpar o browser ou mudar de dispositivo — ao
+    contrário do código simples do Jogador, que só vive no localStorage
+    de um aparelho. Uma conta está sempre ligada a um código de Jogador,
+    reaproveitando as estatísticas e a lista de amigos já existentes."""
+    __tablename__ = "contas"
+    email: Mapped[str] = mapped_column(String, primary_key=True)
+    senha_hash: Mapped[str] = mapped_column(String)
+    nome: Mapped[str] = mapped_column(String, default="Jogador")
+    codigo: Mapped[str] = mapped_column(String)
+    criada_em: Mapped[str] = mapped_column(String, default="")
+
+
+class SessaoConta(Base):
+    """Um token de sessão simples (não é JWT) — basta gerar um valor
+    aleatório imprevisível e guardá-lo; o cliente manda-o de volta no
+    cabeçalho Authorization. Apagar a linha equivale a terminar sessão."""
+    __tablename__ = "sessoes_conta"
+    token: Mapped[str] = mapped_column(String, primary_key=True)
+    email: Mapped[str] = mapped_column(String)
+    criada_em: Mapped[str] = mapped_column(String, default="")
 
 
 engine = create_async_engine(BASE_DE_DADOS, connect_args=_connect_args)
@@ -1606,6 +1639,108 @@ async def obter_jogador(codigo: str, _: None = Depends(limitar_jogador)) -> dict
         "sem_ajuda": jogador.sem_ajuda,
         "streak": jogador.streak,
     }
+
+
+# ---------------------------------------------------------------- contas
+
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class DadosRegisto(BaseModel):
+    email: str
+    password: str
+    nome: str = "Jogador"
+
+
+class DadosLogin(BaseModel):
+    email: str
+    password: str
+
+
+def gerar_codigo() -> str:
+    letras = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sem 0/O/1/I, para não confundir
+    return "".join(random.choice(letras) for _ in range(6))
+
+
+async def criar_sessao_conta(email: str) -> str:
+    token = secrets.token_urlsafe(32)
+    async with Sessao() as sessao:
+        sessao.add(SessaoConta(token=token, email=email, criada_em=dt.datetime.now(dt.timezone.utc).isoformat()))
+        await sessao.commit()
+    return token
+
+
+async def resolver_conta(authorization: str | None = Header(None)) -> Conta | None:
+    """Devolve a conta associada ao token, ou None sem levantar erro —
+    para endpoints onde estar autenticado é opcional."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token:
+        return None
+    async with Sessao() as sessao:
+        sessao_conta = await sessao.get(SessaoConta, token)
+        if not sessao_conta:
+            return None
+        return await sessao.get(Conta, sessao_conta.email)
+
+
+async def exigir_conta(authorization: str | None = Header(None)) -> Conta:
+    conta = await resolver_conta(authorization)
+    if not conta:
+        raise HTTPException(401, "Sessão inválida ou expirada. Inicia sessão outra vez.")
+    return conta
+
+
+@app.post("/conta/registar")
+async def registar_conta(dados: DadosRegisto, _: None = Depends(limitar_conta)) -> dict:
+    email = dados.email.strip().lower()
+    if not EMAIL_REGEX.match(email):
+        raise HTTPException(400, "Email inválido.")
+    if len(dados.password) < 6:
+        raise HTTPException(400, "A password tem de ter pelo menos 6 caracteres.")
+    nome = (dados.nome or "Jogador").strip()[:24] or "Jogador"
+    agora = dt.datetime.now(dt.timezone.utc).isoformat()
+    async with Sessao() as sessao:
+        if await sessao.get(Conta, email):
+            raise HTTPException(409, "Já existe uma conta com este email.")
+        codigo = gerar_codigo()
+        while await sessao.get(Jogador, codigo):  # (praticamente nunca colide, mas por garantia)
+            codigo = gerar_codigo()
+        senha_hash = bcrypt.hashpw(dados.password.encode(), bcrypt.gensalt()).decode()
+        sessao.add(Conta(email=email, senha_hash=senha_hash, nome=nome, codigo=codigo, criada_em=agora))
+        sessao.add(Jogador(codigo=codigo, nome=nome, atualizado_em=agora))
+        await sessao.commit()
+    token = await criar_sessao_conta(email)
+    return {"token": token, "codigo": codigo, "nome": nome, "email": email}
+
+
+@app.post("/conta/entrar")
+async def entrar_conta(dados: DadosLogin, _: None = Depends(limitar_conta)) -> dict:
+    email = dados.email.strip().lower()
+    async with Sessao() as sessao:
+        conta = await sessao.get(Conta, email)
+    if not conta or not bcrypt.checkpw(dados.password.encode(), conta.senha_hash.encode()):
+        raise HTTPException(401, "Email ou password incorretos.")
+    token = await criar_sessao_conta(email)
+    return {"token": token, "codigo": conta.codigo, "nome": conta.nome, "email": conta.email}
+
+
+@app.post("/conta/sair")
+async def sair_conta(authorization: str | None = Header(None)) -> dict:
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        async with Sessao() as sessao:
+            s = await sessao.get(SessaoConta, token)
+            if s:
+                await sessao.delete(s)
+                await sessao.commit()
+    return {"ok": True}
+
+
+@app.get("/conta/eu")
+async def conta_atual(conta: Conta = Depends(exigir_conta)) -> dict:
+    return {"email": conta.email, "codigo": conta.codigo, "nome": conta.nome}
 
 
 @app.get("/catalogo/resumo")

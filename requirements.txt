@@ -5,3 +5,4 @@ greenlet
 aiosqlite
 asyncpg
 apscheduler
+bcrypt

@@ -528,6 +528,11 @@
   <div id="conteudo-estatisticas" style="font-size:14px;line-height:1.7;color:rgba(var(--tinta-rgb),.75);margin-bottom:18px"></div>
 
   <div style="border-top:1px solid var(--linha);padding-top:16px;margin-bottom:16px">
+    <div style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5);margin-bottom:10px">Conta</div>
+    <div id="conteudo-conta"></div>
+  </div>
+
+  <div style="border-top:1px solid var(--linha);padding-top:16px;margin-bottom:16px">
     <div style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5);margin-bottom:10px">Os teus amigos</div>
     <p class="ajuda" style="margin:0 0 10px">O teu código — partilha-o para amigos te adicionarem.</p>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
@@ -607,6 +612,10 @@ var loja = {
   set: async function(k,v){
     if (window.storage){ try{ await window.storage.set(k,v); }catch(e){} }
     try { localStorage.setItem(k, v); } catch(e){ memoria[k] = v; }
+  },
+  remove: async function(k){
+    if (window.storage){ try{ await window.storage.delete(k); }catch(e){} }
+    try { localStorage.removeItem(k); } catch(e){ delete memoria[k]; }
   }
 };
 var CHAVE = "tugle:puzzles", CHAVE_CFG = "tugle:config";
@@ -1535,25 +1544,100 @@ document.addEventListener("keydown", function(ev){
   };
 })();
 
-/* ============ estatísticas pessoais + lista de amigos ============ */
+/* ============ estatísticas pessoais + conta + lista de amigos ============ */
 var CHAVE_CODIGO_JOGADOR = "tugle:codigo-jogador";
+var CHAVE_CONTA_TOKEN = "tugle:conta-token";
 var CHAVE_AMIGOS = "tugle:amigos";
 function gerarCodigo(){
   var letras = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", c = "";
   for (var i=0;i<6;i++) c += letras[Math.floor(Math.random()*letras.length)];
   return c;
 }
+var contaAtual = null;   // {email, codigo, nome} quando há sessão iniciada, senão null
+var modoConta = "entrar"; // ou "registar"
 async function obterCodigoProprio(){
+  if (contaAtual) return contaAtual.codigo;
   var c = await loja.get(CHAVE_CODIGO_JOGADOR);
   if (!c){ c = gerarCodigo(); await loja.set(CHAVE_CODIGO_JOGADOR, c); }
   return c;
 }
+async function carregarConta(){
+  var token = await loja.get(CHAVE_CONTA_TOKEN);
+  if (!token){ contaAtual = null; return; }
+  try {
+    var r = await fetch(baseURL() + "/conta/eu", { headers: { "Authorization": "Bearer " + token } });
+    if (!r.ok){ contaAtual = null; await loja.remove(CHAVE_CONTA_TOKEN); return; }
+    contaAtual = await r.json();
+  } catch(e){ contaAtual = null; }
+}
+function renderConta(){
+  var caixa = el("#conteudo-conta");
+  if (contaAtual){
+    caixa.innerHTML = '<p class="ajuda" style="margin:0 0 10px">Sessão iniciada como <strong>'+contaAtual.nome+'</strong> ('+contaAtual.email+').</p>'
+      + '<button class="btn suave" id="b-sair-conta" style="width:auto;white-space:nowrap">Terminar sessão</button>';
+    el("#b-sair-conta").onclick = async function(){
+      var token = await loja.get(CHAVE_CONTA_TOKEN);
+      try { await fetch(baseURL() + "/conta/sair", { method:"POST", headers:{"Authorization":"Bearer "+token} }); } catch(e){}
+      await loja.remove(CHAVE_CONTA_TOKEN);
+      contaAtual = null;
+      renderConta();
+      renderListaAmigos();
+    };
+    return;
+  }
+  var ehRegisto = modoConta === "registar";
+  var html = '<p class="ajuda" style="margin:0 0 10px">'
+    + (ehRegisto ? 'Cria uma conta para o teu código e os teus amigos te seguirem para outro dispositivo.' : 'Já tens conta? Inicia sessão.')
+    + '</p>';
+  if (ehRegisto){
+    html += '<input id="input-conta-nome" placeholder="O teu nome" maxlength="24" '
+      + 'style="width:100%;margin-bottom:8px;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">';
+  }
+  html += '<input id="input-conta-email" type="email" placeholder="Email" '
+    + 'style="width:100%;margin-bottom:8px;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">';
+  html += '<input id="input-conta-password" type="password" placeholder="Password" '
+    + 'style="width:100%;margin-bottom:8px;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">';
+  html += '<div id="aviso-conta" style="font-size:12.5px;margin-bottom:8px"></div>';
+  html += '<button class="btn suave" id="b-conta-submeter" style="width:auto;white-space:nowrap">'+(ehRegisto?'Criar conta':'Entrar')+'</button>';
+  html += '<p class="ajuda" style="margin:10px 0 0"><a href="#" id="b-alternar-modo-conta" style="color:var(--acento)">'
+    + (ehRegisto ? 'Já tens conta? Entra' : 'Não tens conta? Cria uma') + '</a></p>';
+  caixa.innerHTML = html;
+
+  el("#b-alternar-modo-conta").onclick = function(ev){ ev.preventDefault(); modoConta = ehRegisto ? "entrar" : "registar"; renderConta(); };
+  el("#b-conta-submeter").onclick = async function(){
+    var aviso = el("#aviso-conta");
+    var email = (el("#input-conta-email").value || "").trim();
+    var password = el("#input-conta-password").value || "";
+    if (!email || !password){ aviso.textContent = "Preenche o email e a password."; return; }
+    aviso.textContent = ehRegisto ? "A criar conta…" : "A entrar…";
+    try {
+      var corpo = ehRegisto
+        ? { email: email, password: password, nome: (el("#input-conta-nome").value || "Jogador").trim() || "Jogador" }
+        : { email: email, password: password };
+      var r = await fetch(baseURL() + "/conta/" + (ehRegisto ? "registar" : "entrar"), {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
+      });
+      var dados = await r.json();
+      if (!r.ok){ aviso.textContent = dados.detail || "Não foi possível continuar."; return; }
+      await loja.set(CHAVE_CONTA_TOKEN, dados.token);
+      contaAtual = { email: dados.email, codigo: dados.codigo, nome: dados.nome };
+      renderConta();
+      renderListaAmigos();
+      var dadosStats = await concluidosGuardados();
+      var ids = Object.keys(dadosStats);
+      enviarEstatisticasProprias(ids.length, ids.filter(function(k){ return dadosStats[k]===true; }).length, await calcularStreak());
+    } catch(e){
+      aviso.textContent = "Não consegui ligar ao servidor. Tenta outra vez.";
+    }
+  };
+}
 async function enviarEstatisticasProprias(total, semAjuda, streak){
   try {
     var codigo = await obterCodigoProprio();
+    var nome = contaAtual ? contaAtual.nome : "Jogador";
     await fetch(baseURL() + "/jogador/" + codigo, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nome: "Jogador", total: total, sem_ajuda: semAjuda, streak: streak }),
+      body: JSON.stringify({ nome: nome, total: total, sem_ajuda: semAjuda, streak: streak }),
     });
   } catch(e){ /* falha silenciosa — não é crítico para a experiência */ }
 }
@@ -1626,6 +1710,7 @@ async function renderListaAmigos(){
   });
 }
 async function mostrarEstatisticas(){
+  await carregarConta();
   var dados = await concluidosGuardados();
   var ids = Object.keys(dados);
   var total = ids.length;
@@ -1642,6 +1727,7 @@ async function mostrarEstatisticas(){
   linhas.push('<p class="ajuda" style="margin:0">Taxa de acerto = puzzles resolvidos sem nenhuma ajuda, sobre o total resolvido.</p>');
 
   el("#conteudo-estatisticas").innerHTML = linhas.join("");
+  renderConta();
   el("#codigo-jogador").textContent = await obterCodigoProprio();
   el("#aviso-amigo").textContent = "";
   el("#cortina-estatisticas").classList.add("aberta");
