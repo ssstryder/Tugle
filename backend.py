@@ -39,7 +39,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import Integer, String, select
 from sqlalchemy import JSON
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 LISBOA = ZoneInfo("Europe/Lisbon")
@@ -79,7 +79,7 @@ ARTISTAS_FADO = {
     "Gisela João", "Cuca Roseta", "Raquel Tavares", "Sara Correia",
 }
 ARTISTAS_PIMBA = {
-    "Quim Barreiros", "Tony Carreira", "Emanuel", "Ágata", "Ana Malhoa", "Marco Paulo",
+    "Quim Barreiros", "Tony Carreira", "Emanuel", "Ana Malhoa", "Marco Paulo",
 }
 
 # datas fixas: (mês, dia) -> (nome do tema, artistas)
@@ -195,7 +195,7 @@ ARTISTAS = [
     "Van Zee", "Carolina Deslandes", "MARO", "NAPA", "Vizinhos",
     "Soraia Ramos", "Pedro Mafama",
     # pimba (muito popular em Portugal, apesar de tudo)
-    "Quim Barreiros", "Tony Carreira", "Emanuel", "Ágata", "Ana Malhoa",
+    "Quim Barreiros", "Tony Carreira", "Emanuel", "Ana Malhoa",
     "Marco Paulo",
     # outros
     "Isak", "Zigarro", "Armando Teles",
@@ -434,6 +434,310 @@ IDS_ARTISTA_DEEZER: dict[str, int] = {
 }
 
 
+MUSICAS_CONHECIDAS: dict[str, list[str]] = {
+    # Confirmadas por pesquisa fora da Deezer (Wikipédia, imprensa, etc.) —
+    # não é o "top" da própria Deezer, que já vimos poder estar
+    # contaminado por artistas homónimos. Lista pequena de propósito;
+    # cresce aos poucos, artista a artista, à medida que se confirma.
+    "Taylor Swift": [
+        "Blank Space", "Shake It Off", "Love Story", "Anti-Hero",
+    ],
+    "Amália Rodrigues": [
+        "Uma Casa Portuguesa", "Estranha Forma de Vida",
+        "Povo Que Lavas no Rio", "Gaivota", "Coimbra",
+    ],
+    "Mariza": [
+        "Chuva", "Ó Gente da Minha Terra", "Barco Negro",
+        "Meu Fado Meu", "Maria Lisboa",
+    ],
+    "Zeca Afonso": [
+        "Grândola, Vila Morena",
+    ],
+    "Carminho": [
+        "Perdóname", "As Pedras da Minha Rua",
+    ],
+    "Ana Moura": [
+        "Dia de Folga", "Desfado", "Andorinhas",
+    ],
+    "Gisela João": [
+        "Sr. Extraterrestre",
+    ],
+    "Cuca Roseta": [
+        "Rua do Capelão",
+    ],
+    "Raquel Tavares": [
+        "Meu Amor de Longe",
+    ],
+    "Sara Correia": [
+        "Chegou Tão Tarde", "Quero é Viver",
+    ],
+    "Sérgio Godinho": [
+        "O Primeiro Dia", "É Terça-Feira", "Com um Brilhozinho nos Olhos",
+    ],
+    "Rui Veloso": [
+        "Porto Sentido", "Chico Fininho",
+    ],
+    "Xutos & Pontapés": [
+        "A Minha Casinha",
+    ],
+    "GNR": [
+        "Dunas", "Pronúncia do Norte",
+    ],
+    "Ornatos Violeta": [
+        "Ouvi Dizer", "A Dama do Sinal",
+    ],
+    "Pedro Abrunhosa": [
+        "Momento", "Tudo o Que Eu Te Dou", "Não Desistas de Mim",
+    ],
+    "Capitão Fausto": [
+        "Amanhã Tou Melhor", "Morro na Praia",
+    ],
+    "Toranja": [
+        "Carta", "Fogo e Noite",
+    ],
+    "Delfins": [
+        "A Baía de Cascais", "Sou Como Um Rio",
+    ],
+    "D'ZRT": [
+        "Para Mim Tanto Me Faz", "Quero Voltar",
+    ],
+    "Anjos": [
+        "Ficarei", "É o Amor",
+    ],
+    "Da Weasel": [
+        "Re-Tratamento", "Força (Uma Página de História)", "Todagente",
+    ],
+    "Slow J": [
+        "Só Queria Sorrir", "FAM", "Também Sonhar",
+    ],
+    "Plutónio": [
+        "Meu Deus", "Cafeína",
+    ],
+    "Papillon": [
+        "Sweet Spot", "Iminente",
+    ],
+    "Dino D'Santiago": [
+        "Nu Bai",
+    ],
+    "Mishlawi": [
+        "All Night", "Always On My Mind",
+    ],
+    "Bispo": [
+        "Essa Saia", "NÓS2",
+    ],
+    "Boss AC": [
+        "Sexta-Feira (Emprego Bom Já)", "Baza, Baza",
+    ],
+    "Regula": [
+        "Casanova",
+    ],
+    "Piruka": [
+        "Ca Bu Fla Ma Nau", "Se Eu Não Acordar Amanhã", "Salto Alto",
+    ],
+    "Expensive Soul": [
+        "O Amor É Mágico", "13 Mulheres",
+    ],
+    "Toy": [
+        "Sou Português",
+    ],
+    "Mizzy Miles": [
+        "Europa", "Bênção",
+    ],
+    "Nga": [
+        "Deus Me Perdoa",
+    ],
+    "Karetus": [
+        "Future Is Now",
+    ],
+    "The Gift": [
+        "Driving You Slow", "Primavera",
+    ],
+    "Sara Tavares": [
+        "Chamar a Música", "Eu Sei",
+    ],
+    "Julinho KSD": [
+        "Sentimento Safari", "Vivi Good",
+    ],
+    "Nenny": [
+        "Sushi", "Bússola",
+    ],
+    "Sam The Kid": [
+        "16/12/95", "Poetas de Karaoke",
+    ],
+    "Valete": [
+        "Roleta Russa", "Anti-Herói",
+    ],
+    "Mundo Segundo": [
+        "Bate Palmas",
+    ],
+    "ProfJam": [
+        "Água de Coco", "Malibu",
+    ],
+    "HMB": [
+        "O Amor É Assim",
+    ],
+    "Wet Bed Gang": [
+        "Devia Ir", "Bairro",
+    ],
+    "Buraka Som Sistema": [
+        "Sound of Kuduro", "Kalemba (Wegue Wegue)",
+    ],
+    "Calema": [
+        "A Nossa Vez",
+    ],
+    "Anselmo Ralph": [
+        "Não Me Toca",
+    ],
+    "C4 Pedro": [
+        "Vamos Ficar Por Aqui",
+    ],
+    "Ivandro": [
+        "Lua", "Como Tu", "Essa Saia",
+    ],
+    "Agir": [
+        "Parte-me o Pescoço", "Wella",
+    ],
+    "T-Rex": [
+        "Dr. Bayard", "Gang Gang",
+    ],
+    "D.A.M.A": [
+        "Balada do Desajeitado", "Luísa",
+    ],
+    "Buba Espinho": [
+        "Roubei-te um Beijo",
+    ],
+    "Chico da Tina": [
+        "Ronaldo", "Resort",
+    ],
+    "GROGNation": [
+        "Distante", "Dá-me Espaço",
+    ],
+    "Nininho Vaz Maia": [
+        "E Agora",
+    ],
+    "Gama WNTD": [
+        "Borboletas",
+    ],
+    "ATOA": [
+        "Tu na Tua", "Distância",
+    ],
+    "LON3R JOHNY": [
+        "DEATH NOTE",
+    ],
+    "9 Miller": [
+        "Filho da Guida", "Limonada",
+    ],
+    "Hollyhood": [
+        "Fácil", "Cobras e Ratazanas", "Miúda",
+    ],
+    "Dillaz": [
+        "Alô", "Juvena",
+    ],
+    "Richie Campbell": [
+        "Do You No Wrong", "That's How We Roll",
+    ],
+    "Salvador Sobral": [
+        "Amar Pelos Dois",
+    ],
+    "Bárbara Tinoco": [
+        "Antes Dela Dizer Que Sim", "Chamada Não Atendida",
+    ],
+    "Diogo Piçarra": [
+        "Tu e Eu", "Monarquia", "Trevo",
+    ],
+    "Aurea": [
+        "Busy for Me", "Okay Alright",
+    ],
+    "Ana Bacalhau": [
+        "O Erro Mais Bonito",
+    ],
+    "Miguel Araújo": [
+        "Os Maridos das Outras", "Dona Laura",
+    ],
+    "David Carreira": [
+        "Esta Noite", "Ficamos Por Aqui",
+    ],
+    "Fernando Daniel": [
+        "Voltas", "Se Eu",
+    ],
+    "Cláudia Pascoal": [
+        "O Jardim",
+    ],
+    "Iolanda": [
+        "Grito",
+    ],
+    "Bárbara Bandeira": [
+        "Como Tu",
+    ],
+    "Blaya": [
+        "Faz Gostoso",
+    ],
+    "Mafalda Veiga": [
+        "Planície",
+    ],
+    "Rita Guerra": [
+        "Deixa-me Sonhar (Só Mais Uma Vez)",
+    ],
+    "Van Zee": [
+        "Tempo", "Alma Nua",
+    ],
+    "Carolina Deslandes": [
+        "A Vida Toda", "Avião de Papel",
+    ],
+    "MARO": [
+        "Saudade, Saudade",
+    ],
+    "NAPA": [
+        "Deslocado",
+    ],
+    "Vizinhos": [
+        "Pôr do Sol", "Pobre Ex-Namorado",
+    ],
+    "Soraia Ramos": [
+        "Bai", "BKBN", "O Nosso Amor",
+    ],
+    "Pedro Mafama": [
+        "Preço Certo",
+    ],
+    "Quim Barreiros": [
+        "A Garagem da Vizinha", "Bacalhau à Portuguesa", "O Sorveteiro",
+    ],
+    "Tony Carreira": [
+        "Ai Destino", "Depois de Ti Mais Nada",
+    ],
+    "Emanuel": [
+        "Pimba Pimba",
+    ],
+    "Ana Malhoa": [
+        "Sube la Temperatura", "Tá Turbinada",
+    ],
+    "Marco Paulo": [
+        "Eu Tenho Dois Amores", "Ninguém, Ninguém",
+    ],
+    "Dama": [
+        "CASA", "Loucamente", "Era Eu", "Mãe", "Por ti Amor", "Ficar Óai",
+    ],
+    "Isak": [
+        "Calipo De Cerveja", "Max Win", "Mia Fernandes", "Batota",
+        "Bada Bing", "Drip Fashion", "Sergio Tacchini", "Eu Vou Ao Bairro",
+        "Seguir Em Frente", "Bar Da Praia", "Telescópio", "Grab And Go",
+        "Picheleiro", "Unhas Pintadas",
+    ],
+    "Zigarro": [
+        "Calipo De Cerveja", "Max Win", "Mia Fernandes", "Batota",
+        "Bada Bing", "Drip Fashion", "Sergio Tacchini", "Eu Vou Ao Bairro",
+        "Seguir Em Frente", "Bar Da Praia", "Telescópio", "Grab And Go",
+        "Picheleiro", "Unhas Pintadas",
+    ],
+    "Armando Teles": [
+        "Calipo De Cerveja", "Max Win", "Mia Fernandes", "Batota",
+        "Bada Bing", "Drip Fashion", "Sergio Tacchini", "Eu Vou Ao Bairro",
+        "Seguir Em Frente", "Bar Da Praia", "Telescópio", "Grab And Go",
+        "Picheleiro", "Unhas Pintadas",
+    ],
+}
+
+
 async def explorar_artista(artista: str) -> list[dict]:
     """Até 6 faixas com excerto disponível para um artista."""
     id_conhecido = IDS_ARTISTA_DEEZER.get(artista)
@@ -465,18 +769,8 @@ async def explorar_artista(artista: str) -> list[dict]:
             return []
         artista_id = correspondencia["id"]
 
-    try:
-        r = await cliente.get(f"{DEEZER}/artist/{artista_id}/top", params={"limit": 20})
-        topo = (r.json() or {}).get("data") or []
-    except Exception as erro:
-        print(f"[tugle]   {artista}: falhou a lista de faixas ({erro})")
-        return []
-
-    faixas = []
-    for faixa in topo:
-        if not faixa.get("preview"):
-            continue
-        faixas.append({
+    def para_entrada(faixa: dict) -> dict:
+        return {
             "id": str(faixa["id"]),
             "titulo": limpar_titulo(faixa.get("title_short") or faixa.get("title", "")),
             "artista": faixa.get("artist", {}).get("name", artista),
@@ -484,7 +778,45 @@ async def explorar_artista(artista: str) -> list[dict]:
             "album_id": faixa.get("album", {}).get("id"),
             "capa": faixa.get("album", {}).get("cover_medium", ""),
             "audio": faixa["preview"],
-        })
+        }
+
+    faixas: list[dict] = []
+    ids_vistos: set[int] = set()
+
+    # Prioridade 1: músicas confirmadas como famosas por pesquisa externa
+    # — vamos buscar especificamente essas à Deezer (só para o áudio),
+    # em vez de confiar na ordenação interna dela.
+    for titulo in MUSICAS_CONHECIDAS.get(artista, []):
+        try:
+            r = await cliente.get(f"{DEEZER}/search/track", params={
+                "q": f'artist:"{artista}" track:"{titulo}"', "limit": 1,
+            })
+            achadas = (r.json() or {}).get("data") or []
+        except Exception:
+            continue
+        if not achadas or not achadas[0].get("preview"):
+            continue
+        if achadas[0]["id"] in ids_vistos:
+            continue
+        ids_vistos.add(achadas[0]["id"])
+        faixas.append(para_entrada(achadas[0]))
+        if len(faixas) >= 6:
+            return faixas
+
+    # Prioridade 2: completar (ou, se não houver lista curada, usar
+    # exclusivamente) com o "top tracks" da Deezer.
+    try:
+        r = await cliente.get(f"{DEEZER}/artist/{artista_id}/top", params={"limit": 20})
+        topo = (r.json() or {}).get("data") or []
+    except Exception as erro:
+        print(f"[tugle]   {artista}: falhou a lista de faixas ({erro})")
+        return faixas
+
+    for faixa in topo:
+        if not faixa.get("preview") or faixa["id"] in ids_vistos:
+            continue
+        ids_vistos.add(faixa["id"])
+        faixas.append(para_entrada(faixa))
         if len(faixas) >= 6:
             break
     if not faixas:
@@ -565,6 +897,24 @@ async def garantir_catalogo(minimo: int, limite_por_chamada: int = 25) -> None:
 
 # ---------------------------------------------------------------- montagem do puzzle diário
 
+STOPWORDS_RESPOSTA = {
+    "A", "AS", "O", "OS", "UM", "UMA", "UNS", "UMAS",
+    "DE", "DA", "DO", "DAS", "DOS", "EM", "NA", "NO", "NAS", "NOS",
+    "E", "OU", "MAS", "SE", "QUE", "COM", "SEM", "POR", "PARA", "PRA",
+    "NAO", "SIM", "JA", "SO", "AI", "LA", "CA", "AQUI", "ALI",
+    "EU", "TU", "ELE", "ELA", "NOS", "VOS", "ELES", "ELAS", "TE", "ME", "SE",
+    "MEU", "TEU", "SEU", "MINHA", "TUA", "SUA", "TEUS", "SEUS",
+    "ESTE", "ESTA", "ESSE", "ESSA", "ISTO", "ISSO", "AQUELE", "AQUELA",
+    "VOU", "VAI", "VAO", "ESTA", "ESTAO", "É", "ERA", "FOI", "SER", "ESTAR",
+    "MAIS", "MENOS", "MUITO", "POUCO", "AO", "AOS", "PELO", "PELA",
+    "ATE", "DESDE", "ENTAO", "ASSIM", "COMO", "QUANDO", "ONDE", "PORQUE",
+}
+
+
+def eh_stopword(palavra: str) -> bool:
+    return normalizar(palavra) in STOPWORDS_RESPOSTA
+
+
 def candidatos_resposta(faixa: "Faixa") -> list[tuple[str, str]]:
     """Todas as hipóteses válidas de resposta para esta música, cada uma
     com várias frases possíveis — a curta e direta é só mais uma opção,
@@ -596,18 +946,19 @@ def candidatos_resposta(faixa: "Faixa") -> list[tuple[str, str]]:
 
     palavras_titulo = titulo.split()
     if len(palavras_titulo) > 1:
-        if cabe(palavras_titulo[0]):
+        if cabe(palavras_titulo[0]) and not eh_stopword(palavras_titulo[0]):
             resto = " ".join(palavras_titulo[1:])
             candidatos.append((palavras_titulo[0], "Primeira palavra do título."))
             candidatos.append((palavras_titulo[0], f"Como começa “___ {resto}”?"))
-        if palavras_titulo[-1] != palavras_titulo[0] and cabe(palavras_titulo[-1]):
+        if (palavras_titulo[-1] != palavras_titulo[0] and cabe(palavras_titulo[-1])
+                and not eh_stopword(palavras_titulo[-1])):
             resto = " ".join(palavras_titulo[:-1])
             candidatos.append((palavras_titulo[-1], "Última palavra do título."))
             candidatos.append((palavras_titulo[-1], f"Como termina “{resto} ___”?"))
 
     palavras_artista = artista.split()
     if len(palavras_artista) > 1:
-        if cabe(palavras_artista[0]):
+        if cabe(palavras_artista[0]) and not eh_stopword(palavras_artista[0]):
             resto = " ".join(palavras_artista[1:])
             candidatos.append((palavras_artista[0], "Primeira palavra do nome do artista."))
             candidatos.append((palavras_artista[0], f"Como começa o nome “___ {resto}”?"))
