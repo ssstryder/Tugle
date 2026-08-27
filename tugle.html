@@ -528,7 +528,15 @@
   <h2>As tuas estatísticas</h2>
   <div id="conteudo-estatisticas" style="font-size:14px;line-height:1.7;color:rgba(var(--tinta-rgb),.75);margin-bottom:18px"></div>
 
-  <div style="border-top:1px solid var(--linha);padding-top:16px;margin-bottom:16px">
+  <button class="btn primario" id="b-fechar-estatisticas">Fechar</button>
+</div>
+
+<div class="cortina" id="cortina-conta"></div>
+<div class="boas-vindas" id="modal-conta" style="width:380px">
+  <h2 id="titulo-conta">Entrar</h2>
+  <div id="conteudo-conta"></div>
+
+  <div style="border-top:1px solid var(--linha);padding-top:16px;margin-top:18px;margin-bottom:16px">
     <div style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5);margin-bottom:10px">Os teus amigos</div>
     <p class="ajuda" style="margin:0 0 10px">O teu código — partilha-o para amigos te adicionarem.</p>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
@@ -547,14 +555,7 @@
     <div id="lista-amigos" style="margin-top:12px"></div>
   </div>
 
-  <button class="btn primario" id="b-fechar-estatisticas">Fechar</button>
-</div>
-
-<div class="cortina" id="cortina-conta"></div>
-<div class="boas-vindas" id="modal-conta" style="width:340px">
-  <h2 id="titulo-conta">Entrar</h2>
-  <div id="conteudo-conta"></div>
-  <button class="btn suave" id="b-fechar-conta" style="margin-top:14px">Fechar</button>
+  <button class="btn suave" id="b-fechar-conta">Fechar</button>
 </div>
 
 <div class="cortina" id="cortina-boas-vindas"></div>
@@ -1583,6 +1584,7 @@ function renderConta(){
       await loja.remove(CHAVE_CONTA_TOKEN);
       contaAtual = null;
       renderConta();
+      el("#codigo-jogador").textContent = await obterCodigoProprio();
       renderListaAmigos();
       atualizarBotaoConta();
     };
@@ -1627,6 +1629,7 @@ function renderConta(){
       await loja.set(CHAVE_CONTA_TOKEN, dados.token);
       contaAtual = { email: dados.email, codigo: dados.codigo, nome: dados.nome };
       renderConta();
+      el("#codigo-jogador").textContent = await obterCodigoProprio();
       renderListaAmigos();
       atualizarBotaoConta();
       var dadosStats = await concluidosGuardados();
@@ -1644,8 +1647,15 @@ async function abrirModalConta(){
   await carregarConta();
   renderConta();
   atualizarBotaoConta();
+  el("#codigo-jogador").textContent = await obterCodigoProprio();
+  el("#aviso-amigo").textContent = "";
   el("#cortina-conta").classList.add("aberta");
   el("#modal-conta").classList.add("aberta");
+  // garante que o próprio jogador existe na BD, para os amigos o conseguirem adicionar
+  var dados = await concluidosGuardados();
+  var ids = Object.keys(dados);
+  enviarEstatisticasProprias(ids.length, ids.filter(function(k){ return dados[k] === true; }).length, await calcularStreak());
+  renderListaAmigos();
 }
 function fecharModalConta(){
   el("#cortina-conta").classList.remove("aberta");
@@ -1750,12 +1760,9 @@ async function mostrarEstatisticas(){
   linhas.push('<p class="ajuda" style="margin:0">Taxa de acerto = puzzles resolvidos sem nenhuma ajuda, sobre o total resolvido.</p>');
 
   el("#conteudo-estatisticas").innerHTML = linhas.join("");
-  el("#codigo-jogador").textContent = await obterCodigoProprio();
-  el("#aviso-amigo").textContent = "";
   el("#cortina-estatisticas").classList.add("aberta");
   el("#estatisticas").classList.add("aberta");
   enviarEstatisticasProprias(total, semAjuda, streak);
-  renderListaAmigos();
 }
 function fecharEstatisticas(){
   el("#cortina-estatisticas").classList.remove("aberta");
