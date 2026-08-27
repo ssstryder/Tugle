@@ -410,6 +410,7 @@
     </button>
     <nav class="abas">
       <button class="aba ativa" data-vista="jogar">Jogar</button>
+      <button class="aba" id="b-nav-conta">Entrar</button>
       <div class="check-dropdown">
         <button class="aba" id="b-check-menu" aria-haspopup="true" aria-expanded="false">Check</button>
         <div class="check-menu" id="check-menu">
@@ -528,11 +529,6 @@
   <div id="conteudo-estatisticas" style="font-size:14px;line-height:1.7;color:rgba(var(--tinta-rgb),.75);margin-bottom:18px"></div>
 
   <div style="border-top:1px solid var(--linha);padding-top:16px;margin-bottom:16px">
-    <div style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5);margin-bottom:10px">Conta</div>
-    <div id="conteudo-conta"></div>
-  </div>
-
-  <div style="border-top:1px solid var(--linha);padding-top:16px;margin-bottom:16px">
     <div style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5);margin-bottom:10px">Os teus amigos</div>
     <p class="ajuda" style="margin:0 0 10px">O teu código — partilha-o para amigos te adicionarem.</p>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
@@ -543,9 +539,7 @@
     <p class="ajuda" style="margin:0 0 8px">Adicionar um amigo pelo código dele:</p>
     <div style="display:flex;gap:8px;margin-bottom:6px">
       <input id="input-codigo-amigo" placeholder="CÓDIGO" maxlength="12"
-        style="flex:1.1;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:600 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase">
-      <input id="input-apelido-amigo" placeholder="Nome (opcional)" maxlength="24"
-        style="flex:1;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">
+        style="flex:1;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:600 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase">
       <button class="btn suave" id="b-adicionar-amigo" style="width:auto;white-space:nowrap">Adicionar</button>
     </div>
     <div id="aviso-amigo" style="font-size:12.5px;margin-bottom:4px"></div>
@@ -554,6 +548,13 @@
   </div>
 
   <button class="btn primario" id="b-fechar-estatisticas">Fechar</button>
+</div>
+
+<div class="cortina" id="cortina-conta"></div>
+<div class="boas-vindas" id="modal-conta" style="width:340px">
+  <h2 id="titulo-conta">Entrar</h2>
+  <div id="conteudo-conta"></div>
+  <button class="btn suave" id="b-fechar-conta" style="margin-top:14px">Fechar</button>
 </div>
 
 <div class="cortina" id="cortina-boas-vindas"></div>
@@ -1573,6 +1574,7 @@ async function carregarConta(){
 function renderConta(){
   var caixa = el("#conteudo-conta");
   if (contaAtual){
+    el("#titulo-conta").textContent = "A tua conta";
     caixa.innerHTML = '<p class="ajuda" style="margin:0 0 10px">Sessão iniciada como <strong>'+contaAtual.nome+'</strong> ('+contaAtual.email+').</p>'
       + '<button class="btn suave" id="b-sair-conta" style="width:auto;white-space:nowrap">Terminar sessão</button>';
     el("#b-sair-conta").onclick = async function(){
@@ -1582,10 +1584,12 @@ function renderConta(){
       contaAtual = null;
       renderConta();
       renderListaAmigos();
+      atualizarBotaoConta();
     };
     return;
   }
   var ehRegisto = modoConta === "registar";
+  el("#titulo-conta").textContent = ehRegisto ? "Criar conta" : "Entrar";
   var html = '<p class="ajuda" style="margin:0 0 10px">'
     + (ehRegisto ? 'Cria uma conta para o teu código e os teus amigos te seguirem para outro dispositivo.' : 'Já tens conta? Inicia sessão.')
     + '</p>';
@@ -1623,6 +1627,7 @@ function renderConta(){
       contaAtual = { email: dados.email, codigo: dados.codigo, nome: dados.nome };
       renderConta();
       renderListaAmigos();
+      atualizarBotaoConta();
       var dadosStats = await concluidosGuardados();
       var ids = Object.keys(dadosStats);
       enviarEstatisticasProprias(ids.length, ids.filter(function(k){ return dadosStats[k]===true; }).length, await calcularStreak());
@@ -1631,6 +1636,23 @@ function renderConta(){
     }
   };
 }
+function atualizarBotaoConta(){
+  el("#b-nav-conta").textContent = contaAtual ? contaAtual.nome : "Entrar";
+}
+async function abrirModalConta(){
+  await carregarConta();
+  renderConta();
+  atualizarBotaoConta();
+  el("#cortina-conta").classList.add("aberta");
+  el("#modal-conta").classList.add("aberta");
+}
+function fecharModalConta(){
+  el("#cortina-conta").classList.remove("aberta");
+  el("#modal-conta").classList.remove("aberta");
+}
+el("#b-nav-conta").onclick = abrirModalConta;
+el("#b-fechar-conta").onclick = fecharModalConta;
+el("#cortina-conta").onclick = fecharModalConta;
 async function enviarEstatisticasProprias(total, semAjuda, streak){
   try {
     var codigo = await obterCodigoProprio();
@@ -1727,7 +1749,6 @@ async function mostrarEstatisticas(){
   linhas.push('<p class="ajuda" style="margin:0">Taxa de acerto = puzzles resolvidos sem nenhuma ajuda, sobre o total resolvido.</p>');
 
   el("#conteudo-estatisticas").innerHTML = linhas.join("");
-  renderConta();
   el("#codigo-jogador").textContent = await obterCodigoProprio();
   el("#aviso-amigo").textContent = "";
   el("#cortina-estatisticas").classList.add("aberta");
@@ -1753,7 +1774,6 @@ el("#b-copiar-codigo").onclick = async function(){
 el("#b-adicionar-amigo").onclick = async function(){
   var aviso = el("#aviso-amigo");
   var codigoAmigo = (el("#input-codigo-amigo").value || "").trim().toUpperCase();
-  var apelido = (el("#input-apelido-amigo").value || "").trim();
   aviso.style.color = "";
   if (!codigoAmigo){ aviso.textContent = "Escreve o código do teu amigo."; return; }
   var codigoProprio = await obterCodigoProprio();
@@ -1766,9 +1786,9 @@ el("#b-adicionar-amigo").onclick = async function(){
     if (r.status === 404){ aviso.textContent = "Não encontrei nenhum jogador com esse código. Ele já abriu as estatísticas dele pelo menos uma vez?"; return; }
     if (!r.ok) throw new Error("estado " + r.status);
     var dadosAmigo = await r.json();
-    amigos.push({ codigo: codigoAmigo, apelido: apelido || dadosAmigo.nome || codigoAmigo });
+    amigos.push({ codigo: codigoAmigo, apelido: dadosAmigo.nome || codigoAmigo });
     await guardarAmigos(amigos);
-    el("#input-codigo-amigo").value = ""; el("#input-apelido-amigo").value = "";
+    el("#input-codigo-amigo").value = "";
     aviso.textContent = "";
     await renderListaAmigos();
   } catch(e){
@@ -1826,6 +1846,8 @@ atualizarBadgeArquivo();
 /* ============ arranque ============ */
 (async function(){
   mostrarEsqueleto();
+
+  carregarConta().then(atualizarBotaoConta);
 
   var cfg = await loja.get(CHAVE_CFG);
   if (cfg){ try { config = JSON.parse(cfg); } catch(e){} }
