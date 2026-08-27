@@ -36,7 +36,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import Integer, String, select
 from sqlalchemy import JSON
@@ -1321,6 +1321,20 @@ app.add_middleware(
     allow_origins=["https://www.tugle.pt", "https://tugle.pt", "https://tugle.onrender.com"],
     allow_methods=["GET", "POST"], allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def forcar_dominio_canonico(request: Request, chamar_seguinte):
+    """Se alguém chega por 'tugle.pt' (sem www), manda para 'www.tugle.pt'.
+    Sem isto, os dois domínios servem o mesmo site em paralelo, mas para o
+    browser são origens diferentes — o localStorage (progresso, puzzles
+    concluídos, sequência de dias) fica dividido consoante o domínio por
+    onde se entrou, dando a sensação de que os dados "desaparecem"."""
+    anfitriao = request.headers.get("host", "")
+    if anfitriao.split(":")[0] == "tugle.pt":
+        destino = request.url.replace(scheme="https", netloc="www.tugle.pt")
+        return RedirectResponse(str(destino), status_code=301)
+    return await chamar_seguinte(request)
 
 
 @app.middleware("http")
