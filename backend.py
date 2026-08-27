@@ -176,6 +176,12 @@ async def limitar_conta(request: Request) -> None:
         raise HTTPException(429, "Demasiadas tentativas em pouco tempo. Espera uns minutos.")
 
 
+async def limitar_progresso(request: Request) -> None:
+    ip = request.client.host if request.client else "desconhecido"
+    if limite_excedido(f"progresso:{ip}", maximo=60, janela_segundos=300):
+        raise HTTPException(429, "Demasiados pedidos em pouco tempo.")
+
+
 # A Deezer recorta os 30s de antevisão a começar algures na música, muitas
 # vezes ainda em desvanecimento/intro. Saltar uns segundos costuma aproximar
 # do refrão — não há forma de o garantir sem analisar o áudio a sério.
@@ -471,6 +477,19 @@ class SessaoConta(Base):
     token: Mapped[str] = mapped_column(String, primary_key=True)
     email: Mapped[str] = mapped_column(String)
     criada_em: Mapped[str] = mapped_column(String, default="")
+
+
+class ProgressoConta(Base):
+    """O progresso de um puzzle específico (respostas na grelha, se levou
+    ajuda, etc.), ligado a uma conta — para abrires noutro dispositivo e
+    continuares exatamente onde ficaste. Uma linha por (conta, puzzle)."""
+    __tablename__ = "progresso_conta"
+    email: Mapped[str] = mapped_column(String, primary_key=True)
+    puzzle_id: Mapped[str] = mapped_column(String, primary_key=True)
+    conteudo: Mapped[dict] = mapped_column(JSON)
+    concluido: Mapped[bool] = mapped_column(default=False)
+    sem_ajuda: Mapped[bool | None] = mapped_column(nullable=True)
+    atualizado_em: Mapped[str] = mapped_column(String, default="")
 
 
 engine = create_async_engine(BASE_DE_DADOS, connect_args=_connect_args)
@@ -1741,6 +1760,55 @@ async def sair_conta(authorization: str | None = Header(None)) -> dict:
 @app.get("/conta/eu")
 async def conta_atual(conta: Conta = Depends(exigir_conta)) -> dict:
     return {"email": conta.email, "codigo": conta.codigo, "nome": conta.nome}
+
+
+class DadosProgresso(BaseModel):
+    conteudo: dict
+    concluido: bool = False
+    sem_ajuda: bool | None = None
+
+
+@app.put("/conta/progresso/{puzzle_id}")
+async def guardar_progresso_conta(
+    puzzle_id: str,
+    dados: DadosProgresso,
+    conta: Conta = Depends(exigir_conta),
+    _: None = Depends(limitar_progresso),
+) -> dict:
+    agora = dt.datetime.now(dt.timezone.utc).isoformat()
+    async with Sessao() as sessao:
+        registo = await sessao.get(ProgressoConta, (conta.email, puzzle_id))
+        if not registo:
+            registo = ProgressoConta(email=conta.email, puzzle_id=puzzle_id)
+            sessao.add(registo)
+        registo.conteudo = dados.conteudo
+        registo.concluido = dados.concluido
+        registo.sem_ajuda = dados.sem_ajuda
+        registo.atualizado_em = agora
+        await sessao.commit()
+    return {"ok": True}
+
+
+@app.get("/conta/progresso")
+async def listar_progresso_conta(conta: Conta = Depends(exigir_conta)) -> list[dict]:
+    """Tudo o progresso guardado nesta conta — usado para preencher um
+    dispositivo novo (ou o localStorage depois de o limpares) assim que
+    inicias sessão."""
+    async with Sessao() as sessao:
+        resultado = await sessao.execute(
+            select(ProgressoConta).where(ProgressoConta.email == conta.email)
+        )
+        registos = resultado.scalars().all()
+    return [
+        {
+            "puzzle_id": r.puzzle_id,
+            "conteudo": r.conteudo,
+            "concluido": r.concluido,
+            "sem_ajuda": r.sem_ajuda,
+            "atualizado_em": r.atualizado_em,
+        }
+        for r in registos
+    ]
 
 
 @app.get("/catalogo/resumo")

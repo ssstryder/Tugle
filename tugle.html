@@ -528,15 +528,7 @@
   <h2>As tuas estatísticas</h2>
   <div id="conteudo-estatisticas" style="font-size:14px;line-height:1.7;color:rgba(var(--tinta-rgb),.75);margin-bottom:18px"></div>
 
-  <button class="btn primario" id="b-fechar-estatisticas">Fechar</button>
-</div>
-
-<div class="cortina" id="cortina-conta"></div>
-<div class="boas-vindas" id="modal-conta" style="width:380px">
-  <h2 id="titulo-conta">Entrar</h2>
-  <div id="conteudo-conta"></div>
-
-  <div style="border-top:1px solid var(--linha);padding-top:16px;margin-top:18px;margin-bottom:16px">
+  <div style="border-top:1px solid var(--linha);padding-top:16px;margin-bottom:16px">
     <div style="font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:rgba(var(--tinta-rgb),.5);margin-bottom:10px">Os teus amigos</div>
     <p class="ajuda" style="margin:0 0 10px">O teu código — partilha-o para amigos te adicionarem.</p>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
@@ -555,7 +547,14 @@
     <div id="lista-amigos" style="margin-top:12px"></div>
   </div>
 
-  <button class="btn suave" id="b-fechar-conta">Fechar</button>
+  <button class="btn primario" id="b-fechar-estatisticas">Fechar</button>
+</div>
+
+<div class="cortina" id="cortina-conta"></div>
+<div class="boas-vindas" id="modal-conta" style="width:340px">
+  <h2 id="titulo-conta">Entrar</h2>
+  <div id="conteudo-conta"></div>
+  <button class="btn suave" id="b-fechar-conta" style="margin-top:14px">Fechar</button>
 </div>
 
 <div class="cortina" id="cortina-boas-vindas"></div>
@@ -752,6 +751,59 @@ async function guardarProgresso(){
       ajudaUsada: ajudaUsada, ajudaPorPalavra: ajudaPorPalavra, checksUsados: checksUsados
     }));
   } catch(e){}
+  sincronizarProgressoConta();
+}
+var temporizadorSincProgresso = null;
+function sincronizarProgressoConta(){
+  if (!contaAtual || !atual) return;
+  var puzzleId = atual.id;
+  clearTimeout(temporizadorSincProgresso);
+  temporizadorSincProgresso = setTimeout(async function(){
+    var token = await loja.get(CHAVE_CONTA_TOKEN);
+    if (!token) return;
+    var total = atual.grelha.colocadas.length;
+    var feitas = Object.keys(resolvido).length;
+    var concluido = total > 0 && feitas >= total;
+    try {
+      await fetch(baseURL() + "/conta/progresso/" + encodeURIComponent(puzzleId), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+        body: JSON.stringify({
+          conteudo: { resposta: resposta, resolvido: resolvido, ajudaUsada: ajudaUsada, ajudaPorPalavra: ajudaPorPalavra, checksUsados: checksUsados },
+          concluido: concluido,
+          sem_ajuda: concluido ? !ajudaUsada : null,
+        }),
+      });
+    } catch(e){ /* falha silenciosa — o localStorage já ficou bem guardado */ }
+  }, 1500); // espera a pessoa parar de escrever antes de mandar ao servidor
+}
+async function puxarProgressoDaConta(){
+  if (!contaAtual) return;
+  var token = await loja.get(CHAVE_CONTA_TOKEN);
+  if (!token) return;
+  try {
+    var r = await fetch(baseURL() + "/conta/progresso", { headers: { "Authorization": "Bearer " + token } });
+    if (!r.ok) return;
+    var registos = await r.json();
+    var concluidos = await concluidosGuardados();
+    var mudouConcluidos = false;
+    for (var i=0;i<registos.length;i++){
+      var reg = registos[i];
+      // só escreve o progresso detalhado se ainda não houver nada local —
+      // para não pisar progresso mais recente feito neste dispositivo
+      var chaveLocal = chaveProgresso(reg.puzzle_id);
+      var existeLocal = await loja.get(chaveLocal);
+      if (!existeLocal) await loja.set(chaveLocal, JSON.stringify(reg.conteudo));
+      if (reg.concluido && !(reg.puzzle_id in concluidos)){
+        concluidos[reg.puzzle_id] = reg.sem_ajuda === true;
+        mudouConcluidos = true;
+      }
+    }
+    if (mudouConcluidos){
+      await loja.set(CHAVE_CONCLUIDOS, JSON.stringify(concluidos));
+      if (typeof atualizarBadgeArquivo === "function") atualizarBadgeArquivo();
+    }
+  } catch(e){ /* falha silenciosa */ }
 }
 async function carregarProgresso(id){
   var s = await loja.get(chaveProgresso(id));
@@ -1584,7 +1636,6 @@ function renderConta(){
       await loja.remove(CHAVE_CONTA_TOKEN);
       contaAtual = null;
       renderConta();
-      el("#codigo-jogador").textContent = await obterCodigoProprio();
       renderListaAmigos();
       atualizarBotaoConta();
     };
@@ -1602,12 +1653,11 @@ function renderConta(){
   html += '<input id="input-conta-email" type="email" placeholder="Email" '
     + 'style="width:100%;margin-bottom:8px;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">';
   html += '<input id="input-conta-password" type="password" placeholder="Password" '
-    + 'style="width:100%;margin-bottom:6px;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">';
-  html += '<p style="margin:0 0 12px;font:400 12px/1.4 var(--sans);color:rgba(var(--tinta-rgb),.5)">'
-    + '<a href="#" id="b-alternar-modo-conta" style="color:inherit;text-decoration:underline;text-underline-offset:2px">'
-    + (ehRegisto ? 'Já tens conta? Entra' : 'Não tens conta? Cria uma') + '</a></p>';
+    + 'style="width:100%;margin-bottom:8px;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">';
   html += '<div id="aviso-conta" style="font-size:12.5px;margin-bottom:8px"></div>';
-  html += '<button class="btn primario" id="b-conta-submeter">'+(ehRegisto?'Criar conta':'Entrar')+'</button>';
+  html += '<button class="btn suave" id="b-conta-submeter" style="width:auto;white-space:nowrap">'+(ehRegisto?'Criar conta':'Entrar')+'</button>';
+  html += '<p class="ajuda" style="margin:10px 0 0"><a href="#" id="b-alternar-modo-conta" style="color:var(--acento)">'
+    + (ehRegisto ? 'Já tens conta? Entra' : 'Não tens conta? Cria uma') + '</a></p>';
   caixa.innerHTML = html;
 
   el("#b-alternar-modo-conta").onclick = function(ev){ ev.preventDefault(); modoConta = ehRegisto ? "entrar" : "registar"; renderConta(); };
@@ -1629,9 +1679,9 @@ function renderConta(){
       await loja.set(CHAVE_CONTA_TOKEN, dados.token);
       contaAtual = { email: dados.email, codigo: dados.codigo, nome: dados.nome };
       renderConta();
-      el("#codigo-jogador").textContent = await obterCodigoProprio();
       renderListaAmigos();
       atualizarBotaoConta();
+      await puxarProgressoDaConta();
       var dadosStats = await concluidosGuardados();
       var ids = Object.keys(dadosStats);
       enviarEstatisticasProprias(ids.length, ids.filter(function(k){ return dadosStats[k]===true; }).length, await calcularStreak());
@@ -1647,15 +1697,8 @@ async function abrirModalConta(){
   await carregarConta();
   renderConta();
   atualizarBotaoConta();
-  el("#codigo-jogador").textContent = await obterCodigoProprio();
-  el("#aviso-amigo").textContent = "";
   el("#cortina-conta").classList.add("aberta");
   el("#modal-conta").classList.add("aberta");
-  // garante que o próprio jogador existe na BD, para os amigos o conseguirem adicionar
-  var dados = await concluidosGuardados();
-  var ids = Object.keys(dados);
-  enviarEstatisticasProprias(ids.length, ids.filter(function(k){ return dados[k] === true; }).length, await calcularStreak());
-  renderListaAmigos();
 }
 function fecharModalConta(){
   el("#cortina-conta").classList.remove("aberta");
@@ -1760,9 +1803,12 @@ async function mostrarEstatisticas(){
   linhas.push('<p class="ajuda" style="margin:0">Taxa de acerto = puzzles resolvidos sem nenhuma ajuda, sobre o total resolvido.</p>');
 
   el("#conteudo-estatisticas").innerHTML = linhas.join("");
+  el("#codigo-jogador").textContent = await obterCodigoProprio();
+  el("#aviso-amigo").textContent = "";
   el("#cortina-estatisticas").classList.add("aberta");
   el("#estatisticas").classList.add("aberta");
   enviarEstatisticasProprias(total, semAjuda, streak);
+  renderListaAmigos();
 }
 function fecharEstatisticas(){
   el("#cortina-estatisticas").classList.remove("aberta");
@@ -1855,7 +1901,9 @@ atualizarBadgeArquivo();
 (async function(){
   mostrarEsqueleto();
 
-  carregarConta().then(atualizarBotaoConta);
+  await carregarConta();
+  atualizarBotaoConta();
+  await puxarProgressoDaConta(); // antes de carregar o puzzle, para já vir preenchido
 
   var cfg = await loja.get(CHAVE_CFG);
   if (cfg){ try { config = JSON.parse(cfg); } catch(e){} }
