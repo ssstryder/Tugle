@@ -1600,11 +1600,12 @@ function renderConta(){
   html += '<input id="input-conta-email" type="email" placeholder="Email" '
     + 'style="width:100%;margin-bottom:8px;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">';
   html += '<input id="input-conta-password" type="password" placeholder="Password" '
-    + 'style="width:100%;margin-bottom:8px;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">';
-  html += '<div id="aviso-conta" style="font-size:12.5px;margin-bottom:8px"></div>';
-  html += '<button class="btn suave" id="b-conta-submeter" style="width:auto;white-space:nowrap">'+(ehRegisto?'Criar conta':'Entrar')+'</button>';
-  html += '<p class="ajuda" style="margin:10px 0 0"><a href="#" id="b-alternar-modo-conta" style="color:var(--acento)">'
+    + 'style="width:100%;margin-bottom:6px;padding:9px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--osso);color:var(--carvao);font:400 13px/1 var(--sans)">';
+  html += '<p style="margin:0 0 12px;font:400 12px/1.4 var(--sans);color:rgba(var(--tinta-rgb),.5)">'
+    + '<a href="#" id="b-alternar-modo-conta" style="color:inherit;text-decoration:underline;text-underline-offset:2px">'
     + (ehRegisto ? 'Já tens conta? Entra' : 'Não tens conta? Cria uma') + '</a></p>';
+  html += '<div id="aviso-conta" style="font-size:12.5px;margin-bottom:8px"></div>';
+  html += '<button class="btn primario" id="b-conta-submeter">'+(ehRegisto?'Criar conta':'Entrar')+'</button>';
   caixa.innerHTML = html;
 
   el("#b-alternar-modo-conta").onclick = function(ev){ ev.preventDefault(); modoConta = ehRegisto ? "entrar" : "registar"; renderConta(); };
