@@ -1634,15 +1634,29 @@ async def puzzle_stream(
 
 
 @app.get("/opcoes-modo")
-async def opcoes_modo() -> dict:
+async def opcoes_modo(desde: int = 1990, min_faixas: int = 0) -> dict:
     """Géneros e décadas que existem mesmo no catálogo, para o seletor de
-    modos nunca oferecer uma combinação que dá zero resultados."""
+    modos nunca oferecer uma combinação que dá zero resultados.
+
+    `desde` continua a ser 1990 por omissão porque é isso que o seletor do
+    jogo principal espera: uma grelha precisa de muitas faixas da mesma
+    década para se montar, e as décadas antigas não têm catálogo para isso.
+    O Guesser, que só precisa de uma música de cada vez, pede desde=1900.
+    `min_faixas` esconde décadas com meia dúzia de faixas, que dariam
+    repetição constante."""
     async with Sessao() as sessao:
         generos = (await sessao.execute(select(Faixa.genero))).scalars().all()
-        decadas = (await sessao.execute(select(Faixa.decada))).scalars().all()
+        faixas = list((await sessao.execute(select(Faixa))).scalars().all())
+
+    contagem: dict[int, int] = {}
+    for f in faixas:
+        if f.decada and f.decada >= desde and candidatos_resposta(f):
+            contagem[f.decada] = contagem.get(f.decada, 0) + 1
+
     return {
         "generos": sorted({g for g in generos if g}),
-        "decadas": sorted({d for d in decadas if d and d >= 1990}),
+        "decadas": sorted(d for d, n in contagem.items() if n >= min_faixas),
+        "contagem_decadas": {str(d): n for d, n in sorted(contagem.items())},
     }
 
 

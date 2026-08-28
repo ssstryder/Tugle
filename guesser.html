@@ -713,7 +713,7 @@ el("#b-outra").onclick = novaRonda;
   marcarPastilha("#g-origem", defs.origem);
 
   try {
-    var r = await fetch(baseURL() + "/opcoes-modo");
+    var r = await fetch(baseURL() + "/opcoes-modo?desde=1900&min_faixas=5");
     if (r.ok){
       var opcoes = await r.json();
       var caixa = el("#g-decada");
