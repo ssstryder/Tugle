@@ -440,6 +440,12 @@ class Faixa(Base):
     decada: Mapped[int | None] = mapped_column(Integer, nullable=True)
     adicionada_em: Mapped[str] = mapped_column(String)
     ultima_utilizacao: Mapped[str | None] = mapped_column(String, nullable=True)
+    # O "rank" da Deezer: quanto maior, mais tocada. Não é o número de streams
+    # (a Deezer não o publica), mas é a única medida de popularidade a que
+    # temos acesso e serve para separar os êxitos do resto do catálogo.
+    # Zero significa "ainda não sabemos" — as faixas guardadas antes desta
+    # coluna existir ficam assim até correr /catalogo/popularidade.
+    popularidade: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class PuzzleGuardado(Base):
@@ -892,6 +898,7 @@ async def explorar_artista(artista: str) -> list[dict]:
             "album_id": faixa.get("album", {}).get("id"),
             "capa": faixa.get("album", {}).get("cover_medium", ""),
             "audio": faixa["preview"],
+            "popularidade": int(faixa.get("rank") or 0),
         }
 
     faixas: list[dict] = []
@@ -1006,6 +1013,7 @@ async def garantir_catalogo(minimo: int, limite_por_chamada: int = 25) -> None:
                     id=f["id"], titulo=f["titulo"], artista=f["artista"],
                     album=f.get("album", ""), capa=f["capa"], audio_origem=f["audio"],
                     genero=genero, decada=decada,
+                    popularidade=f.get("popularidade", 0),
                     adicionada_em=dt.date.today().isoformat(), ultima_utilizacao=None,
                 ))
                 total += 1
@@ -1675,15 +1683,21 @@ def _resposta_da_faixa(faixa: "Faixa") -> str:
 
 @app.get("/guesser/nova")
 async def guesser_nova(
-    origem: str = "todos", decada: int | None = None,
+    origem: str = "todos", decada: int | None = None, dificuldade: str = "normal",
     _: None = Depends(limitar_guesser),
 ) -> dict:
     """Uma faixa à sorte para adivinhar. De propósito, não devolve título,
     artista, álbum nem capa — só o id necessário para pedir o áudio. Quem
     quiser espreitar tem de o fazer de propósito; a verificação e a
-    revelação são ambas do lado do servidor."""
+    revelação são ambas do lado do servidor.
+
+    A dificuldade escolhe de que parte do catálogo se tira a música,
+    ordenada por popularidade: 'facil' só sorteia entre os grandes êxitos,
+    'dificil' pode sair qualquer coisa."""
     if origem not in ("todos", "nacional", "internacional"):
         raise HTTPException(400, "origem tem de ser 'todos', 'nacional' ou 'internacional'")
+    if dificuldade not in ("facil", "normal", "dificil"):
+        dificuldade = "normal"
     async with Sessao() as sessao:
         candidatas = list((await sessao.execute(select(Faixa))).scalars().all())
 
@@ -1697,6 +1711,16 @@ async def guesser_nova(
 
     if not candidatas:
         raise HTTPException(422, "Não há faixas com este filtro.")
+
+    # Fatia por popularidade. Se a popularidade ainda não estiver preenchida
+    # (catálogo antigo, antes de /catalogo/popularidade correr), todas ficam
+    # a zero e a ordenação não separa nada — nesse caso não se corta, para o
+    # modo continuar jogável em vez de devolver sempre a mesma faixa.
+    if dificuldade != "dificil" and any(f.popularidade > 0 for f in candidatas):
+        candidatas.sort(key=lambda f: f.popularidade, reverse=True)
+        fracao = 0.25 if dificuldade == "facil" else 0.60
+        corte = max(12, int(len(candidatas) * fracao))
+        candidatas = candidatas[:corte]
 
     escolhida = random.Random(str(uuid4())).choice(candidatas)
     return {
@@ -2105,6 +2129,63 @@ async def catalogo_resumo() -> dict:
         "artistas_com_faixas": len(por_artista),
         "artistas_por_explorar": artistas_por_explorar,
     }
+
+
+@app.post("/catalogo/popularidade")
+async def catalogo_popularidade(
+    limite: int = 300, _: None = Depends(exigir_chave_admin),
+) -> dict:
+    """Vai à Deezer buscar o 'rank' das faixas que ainda não o têm.
+
+    Só trata as que estão a zero, por isso é seguro correr várias vezes:
+    cada chamada avança mais um bocado até estar tudo feito. O `limite`
+    existe para não fazer centenas de pedidos à Deezer de uma vez e
+    apanhar com um bloqueio."""
+    async with Sessao() as sessao:
+        pendentes = list((await sessao.execute(
+            select(Faixa).where(Faixa.popularidade == 0).limit(limite)
+        )).scalars().all())
+
+        atualizadas, falhadas = 0, 0
+        for faixa in pendentes:
+            try:
+                r = await cliente.get(f"{DEEZER}/track/{faixa.id}")
+                rank = int((r.json() or {}).get("rank") or 0)
+            except Exception:
+                falhadas += 1
+                continue
+            if rank > 0:
+                faixa.popularidade = rank
+                atualizadas += 1
+            else:
+                falhadas += 1
+        await sessao.commit()
+
+        em_falta = len((await sessao.execute(
+            select(Faixa).where(Faixa.popularidade == 0)
+        )).scalars().all())
+
+    return {
+        "atualizadas": atualizadas,
+        "sem_resposta": falhadas,
+        "ainda_por_fazer": em_falta,
+        "nota": "corre outra vez enquanto 'ainda_por_fazer' for maior que zero",
+    }
+
+
+@app.get("/catalogo/populares")
+async def catalogo_populares(quantos: int = 30) -> list[dict]:
+    """As faixas mais populares do catálogo, para veres o que o modo fácil
+    vai usar antes de confiares nele."""
+    async with Sessao() as sessao:
+        faixas = list((await sessao.execute(
+            select(Faixa).order_by(Faixa.popularidade.desc()).limit(max(1, min(200, quantos)))
+        )).scalars().all())
+    return [
+        {"titulo": f.titulo, "artista": f.artista,
+         "popularidade": f.popularidade, "decada": f.decada}
+        for f in faixas
+    ]
 
 
 @app.post("/catalogo/limpar")
