@@ -169,6 +169,14 @@ async def limitar_jogador(request: Request) -> None:
         raise HTTPException(429, "Demasiados pedidos em pouco tempo.")
 
 
+async def limitar_adivinha(request: Request) -> None:
+    """Mais folgado que o do stream: aqui cada ronda são vários pedidos
+    (nova música, tentativas, revelar) e o modo é de jogo contínuo."""
+    ip = request.client.host if request.client else "desconhecido"
+    if limite_excedido(f"adivinha:{ip}", maximo=150, janela_segundos=300):
+        raise HTTPException(429, "Demasiados pedidos em pouco tempo. Espera um pouco.")
+
+
 async def limitar_conta(request: Request) -> None:
     ip = request.client.host if request.client else "desconhecido"
     # mais apertado do que o limitador geral — são endpoints com password
@@ -1471,6 +1479,7 @@ PASTA = Path(__file__).parent
 FICHEIRO_FRONTEND = PASTA / "tugle.html"
 FICHEIRO_INICIO = PASTA / "inicio.html"
 FICHEIRO_STREAM = PASTA / "stream.html"
+FICHEIRO_ADIVINHA = PASTA / "adivinha.html"
 FICHEIRO_FAVICON = PASTA / "favicon.svg"
 FICHEIRO_OG_IMAGE = PASTA / "og-image.png"
 FICHEIRO_ROBOTS = PASTA / "robots.txt"
@@ -1502,6 +1511,15 @@ async def pagina_jogo_modo(origem: str, decada: str):
     if FICHEIRO_FRONTEND.exists():
         return FileResponse(FICHEIRO_FRONTEND, media_type="text/html")
     return {"aviso": "coloca o tugle.html na mesma pasta do backend.py"}
+
+
+@app.get("/adivinha", include_in_schema=False)
+async def pagina_adivinha():
+    """Modo de jogo livre: adivinhar a música por um excerto que começa
+    minúsculo e vai crescendo a cada erro."""
+    if FICHEIRO_ADIVINHA.exists():
+        return FileResponse(FICHEIRO_ADIVINHA, media_type="text/html")
+    return {"aviso": "coloca o adivinha.html na mesma pasta do backend.py"}
 
 
 @app.get("/stream", include_in_schema=False)
@@ -1619,6 +1637,116 @@ async def opcoes_modo() -> dict:
         "generos": sorted({g for g in generos if g}),
         "decadas": sorted({d for d in decadas if d and d >= 1990}),
     }
+
+
+# ------------------------------------------------------- modo "adivinha"
+
+class PalpiteAdivinha(BaseModel):
+    id: str
+    palpite: str
+
+
+def _resposta_da_faixa(faixa: "Faixa") -> str:
+    """O título limpo é o que conta como resposta — a mesma regra que a
+    grelha usa, para as duas partes do site não discordarem."""
+    return limpar_titulo(faixa.titulo)
+
+
+@app.get("/adivinha/nova")
+async def adivinha_nova(
+    origem: str = "todos", decada: int | None = None,
+    _: None = Depends(limitar_adivinha),
+) -> dict:
+    """Uma faixa à sorte para adivinhar. De propósito, não devolve título,
+    artista, álbum nem capa — só o id necessário para pedir o áudio. Quem
+    quiser espreitar tem de o fazer de propósito; a verificação e a
+    revelação são ambas do lado do servidor."""
+    if origem not in ("todos", "nacional", "internacional"):
+        raise HTTPException(400, "origem tem de ser 'todos', 'nacional' ou 'internacional'")
+    async with Sessao() as sessao:
+        candidatas = list((await sessao.execute(select(Faixa))).scalars().all())
+
+    candidatas = [f for f in candidatas if candidatos_resposta(f)]
+    if origem == "nacional":
+        candidatas = [f for f in candidatas if not eh_internacional(f.artista)]
+    elif origem == "internacional":
+        candidatas = [f for f in candidatas if eh_internacional(f.artista)]
+    if decada:
+        candidatas = [f for f in candidatas if f.decada == decada]
+
+    if not candidatas:
+        raise HTTPException(422, "Não há faixas com este filtro.")
+
+    escolhida = random.Random(str(uuid4())).choice(candidatas)
+    return {
+        "id": escolhida.id,
+        "audio": f"/audio/{escolhida.id}",
+        "decada": escolhida.decada,
+        "genero": genero_traduzido(escolhida.genero),
+        "letras": len(normalizar(_resposta_da_faixa(escolhida))),
+    }
+
+
+@app.post("/adivinha/tentativa")
+async def adivinha_tentativa(
+    dados: PalpiteAdivinha, _: None = Depends(limitar_adivinha),
+) -> dict:
+    """Verifica o palpite no servidor, para a resposta nunca ter de viajar
+    até ao browser antes da ronda acabar."""
+    async with Sessao() as sessao:
+        faixa = await sessao.get(Faixa, dados.id)
+    if not faixa:
+        raise HTTPException(404, "Faixa desconhecida.")
+    alvo = normalizar(_resposta_da_faixa(faixa))
+    palpite = normalizar(dados.palpite)
+    if not palpite:
+        return {"certo": False}
+    # aceita também o título sem o que vem depois de um travessão
+    # ("Canção - Ao Vivo" conta com "Canção"), porque a Deezer não é
+    # consistente e o jogador não tem como adivinhar o sufixo
+    alvo_curto = normalizar(_resposta_da_faixa(faixa).split(" - ")[0])
+    return {"certo": palpite in (alvo, alvo_curto)}
+
+
+@app.get("/adivinha/revelar/{entrada_id}")
+async def adivinha_revelar(
+    entrada_id: str, _: None = Depends(limitar_adivinha),
+) -> dict:
+    """Chamado quando a ronda acaba (acertou, desistiu, ou esgotou as
+    fases) — só aqui é que o título sai do servidor."""
+    async with Sessao() as sessao:
+        faixa = await sessao.get(Faixa, entrada_id)
+    if not faixa:
+        raise HTTPException(404, "Faixa desconhecida.")
+    return {
+        "titulo": _resposta_da_faixa(faixa),
+        "artista": faixa.artista,
+        "album": faixa.album,
+        "capa": faixa.capa,
+        "decada": faixa.decada,
+    }
+
+
+@app.get("/adivinha/titulos")
+async def adivinha_titulos(_: None = Depends(limitar_adivinha)) -> list[dict]:
+    """Lista de títulos do catálogo, para as sugestões enquanto se escreve.
+    Não revela nada: são centenas de músicas e nenhuma delas está marcada
+    como sendo a da ronda a decorrer."""
+    async with Sessao() as sessao:
+        faixas = list((await sessao.execute(select(Faixa))).scalars().all())
+    vistos: set[str] = set()
+    saida: list[dict] = []
+    for f in faixas:
+        if not candidatos_resposta(f):
+            continue
+        titulo = _resposta_da_faixa(f)
+        chave = normalizar(titulo)
+        if not chave or chave in vistos:
+            continue
+        vistos.add(chave)
+        saida.append({"titulo": titulo, "artista": f.artista})
+    saida.sort(key=lambda e: e["titulo"].lower())
+    return saida
 
 
 @app.get("/puzzles")
