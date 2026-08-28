@@ -169,11 +169,11 @@ async def limitar_jogador(request: Request) -> None:
         raise HTTPException(429, "Demasiados pedidos em pouco tempo.")
 
 
-async def limitar_adivinha(request: Request) -> None:
+async def limitar_guesser(request: Request) -> None:
     """Mais folgado que o do stream: aqui cada ronda são vários pedidos
     (nova música, tentativas, revelar) e o modo é de jogo contínuo."""
     ip = request.client.host if request.client else "desconhecido"
-    if limite_excedido(f"adivinha:{ip}", maximo=150, janela_segundos=300):
+    if limite_excedido(f"guesser:{ip}", maximo=150, janela_segundos=300):
         raise HTTPException(429, "Demasiados pedidos em pouco tempo. Espera um pouco.")
 
 
@@ -1479,7 +1479,7 @@ PASTA = Path(__file__).parent
 FICHEIRO_FRONTEND = PASTA / "tugle.html"
 FICHEIRO_INICIO = PASTA / "inicio.html"
 FICHEIRO_STREAM = PASTA / "stream.html"
-FICHEIRO_ADIVINHA = PASTA / "adivinha.html"
+FICHEIRO_GUESSER = PASTA / "guesser.html"
 FICHEIRO_FAVICON = PASTA / "favicon.svg"
 FICHEIRO_OG_IMAGE = PASTA / "og-image.png"
 FICHEIRO_ROBOTS = PASTA / "robots.txt"
@@ -1514,12 +1514,19 @@ async def pagina_jogo_modo(origem: str, decada: str):
 
 
 @app.get("/adivinha", include_in_schema=False)
-async def pagina_adivinha():
+async def pagina_adivinha_antiga():
+    """O modo chamou-se '/adivinha' durante pouco tempo. Fica o redirecionamento
+    permanente para não partir links já partilhados."""
+    return RedirectResponse("/guesser", status_code=301)
+
+
+@app.get("/guesser", include_in_schema=False)
+async def pagina_guesser():
     """Modo de jogo livre: adivinhar a música por um excerto que começa
     minúsculo e vai crescendo a cada erro."""
-    if FICHEIRO_ADIVINHA.exists():
-        return FileResponse(FICHEIRO_ADIVINHA, media_type="text/html")
-    return {"aviso": "coloca o adivinha.html na mesma pasta do backend.py"}
+    if FICHEIRO_GUESSER.exists():
+        return FileResponse(FICHEIRO_GUESSER, media_type="text/html")
+    return {"aviso": "coloca o guesser.html na mesma pasta do backend.py"}
 
 
 @app.get("/stream", include_in_schema=False)
@@ -1639,9 +1646,9 @@ async def opcoes_modo() -> dict:
     }
 
 
-# ------------------------------------------------------- modo "adivinha"
+# ------------------------------------------------------- modo "guesser"
 
-class PalpiteAdivinha(BaseModel):
+class PalpiteGuesser(BaseModel):
     id: str
     palpite: str
 
@@ -1652,10 +1659,10 @@ def _resposta_da_faixa(faixa: "Faixa") -> str:
     return limpar_titulo(faixa.titulo)
 
 
-@app.get("/adivinha/nova")
-async def adivinha_nova(
+@app.get("/guesser/nova")
+async def guesser_nova(
     origem: str = "todos", decada: int | None = None,
-    _: None = Depends(limitar_adivinha),
+    _: None = Depends(limitar_guesser),
 ) -> dict:
     """Uma faixa à sorte para adivinhar. De propósito, não devolve título,
     artista, álbum nem capa — só o id necessário para pedir o áudio. Quem
@@ -1687,9 +1694,9 @@ async def adivinha_nova(
     }
 
 
-@app.post("/adivinha/tentativa")
-async def adivinha_tentativa(
-    dados: PalpiteAdivinha, _: None = Depends(limitar_adivinha),
+@app.post("/guesser/tentativa")
+async def guesser_tentativa(
+    dados: PalpiteGuesser, _: None = Depends(limitar_guesser),
 ) -> dict:
     """Verifica o palpite no servidor, para a resposta nunca ter de viajar
     até ao browser antes da ronda acabar."""
@@ -1708,9 +1715,9 @@ async def adivinha_tentativa(
     return {"certo": palpite in (alvo, alvo_curto)}
 
 
-@app.get("/adivinha/revelar/{entrada_id}")
-async def adivinha_revelar(
-    entrada_id: str, _: None = Depends(limitar_adivinha),
+@app.get("/guesser/revelar/{entrada_id}")
+async def guesser_revelar(
+    entrada_id: str, _: None = Depends(limitar_guesser),
 ) -> dict:
     """Chamado quando a ronda acaba (acertou, desistiu, ou esgotou as
     fases) — só aqui é que o título sai do servidor."""
@@ -1727,8 +1734,8 @@ async def adivinha_revelar(
     }
 
 
-@app.get("/adivinha/titulos")
-async def adivinha_titulos(_: None = Depends(limitar_adivinha)) -> list[dict]:
+@app.get("/guesser/titulos")
+async def guesser_titulos(_: None = Depends(limitar_guesser)) -> list[dict]:
     """Lista de títulos do catálogo, para as sugestões enquanto se escreve.
     Não revela nada: são centenas de músicas e nenhuma delas está marcada
     como sendo a da ronda a decorrer."""
