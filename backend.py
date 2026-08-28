@@ -40,7 +40,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
-from sqlalchemy import Integer, String, delete, select
+from sqlalchemy import Integer, String, delete, select, text
 from sqlalchemy import JSON
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -1398,6 +1398,23 @@ async def tarefa_meia_noite() -> None:
         print(f"[tugle] falhou a geração de {hoje}: {erro}")
 
 
+async def garantir_colunas(conexao) -> None:
+    """O `create_all` cria tabelas em falta mas nunca acrescenta colunas a
+    tabelas que já existem. Sempre que se junta uma coluna a um modelo já
+    em produção, é preciso acrescentá-la à mão — é o que isto faz, de forma
+    idempotente, para não haver um passo manual esquecido entre máquinas."""
+    colunas = [
+        ("faixas", "popularidade", "INTEGER NOT NULL DEFAULT 0"),
+    ]
+    for tabela, coluna, tipo in colunas:
+        try:
+            await conexao.execute(
+                text(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {coluna} {tipo}")
+            )
+        except Exception as erro:
+            print(f"[tugle] AVISO: não consegui garantir {tabela}.{coluna}: {erro}")
+
+
 @asynccontextmanager
 async def tempo_de_vida(app: FastAPI):
     global cliente
@@ -1407,6 +1424,7 @@ async def tempo_de_vida(app: FastAPI):
     )
     async with engine.begin() as conexao:
         await conexao.run_sync(Base.metadata.create_all)
+        await garantir_colunas(conexao)
 
     try:
         await obter_ou_criar(dt.datetime.now(LISBOA).date())
