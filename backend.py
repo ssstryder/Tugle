@@ -517,6 +517,19 @@ cliente: httpx.AsyncClient | None = None
 # países) — para estes, usa-se sempre o id exato em vez de confiar na busca.
 IDS_ARTISTA_DEEZER: dict[str, int] = {
     "Agir": 665993,  # o português (Bernardo Costa) — não o rapper alemão do mesmo nome
+    # O rapper da Linha de Sintra (Daniel Benjamim) — não a banda glam rock
+    # britânica do Marc Bolan, que na Deezer se escreve "T. Rex". Este caso
+    # não é apanhado pela verificação de nome exato mais abaixo: o normalizar()
+    # tira a pontuação toda, por isso "T-Rex" e "T. Rex" ficam ambos "TREX".
+    # Sem o id fixo, ganha sempre o britânico, que é muito mais pesquisado.
+    "T-Rex": 14046289,
+    # O cantor pimba (Américo Monteiro) — na Deezer há dezenas de "Emanuel"
+    # com o nome escrito exatamente igual, por isso nem uma normalização mais
+    # rigorosa resolveria: só o id distingue. Confirmado por ser o dono do
+    # álbum "Esperança" e por ter Quim Barreiros e José Malhoa como
+    # artistas semelhantes. Atenção ao id 2928, que é um caixote onde a
+    # Deezer juntou uma banda post-hardcore americana e vários homónimos.
+    "Emanuel": 381461551,
 }
 
 
@@ -684,7 +697,11 @@ MUSICAS_CONHECIDAS: dict[str, list[str]] = {
         "Parte-me o Pescoço", "Wella",
     ],
     "T-Rex": [
-        "Dr. Bayard", "Gang Gang",
+        # Confirmadas na própria página do artista na Deezer (id 14046289),
+        # cruzadas com os mais ouvidos no Spotify. "Tempo" fica de fora de
+        # propósito: na Deezer está creditada ao Bispo/LON3R JOHNY com o
+        # T-Rex como convidado, por isso não aparece como faixa dele.
+        "Tinoni", "TA TUDO BEM", "VOLTA", "PRA MIM", "NORMAL", "UUUUHH",
     ],
     "D.A.M.A": [
         "Balada do Desajeitado", "Luísa",
@@ -792,7 +809,10 @@ MUSICAS_CONHECIDAS: dict[str, list[str]] = {
         "Ai Destino", "Depois de Ti Mais Nada",
     ],
     "Emanuel": [
-        "Pimba Pimba",
+        # Títulos confirmados na página do artista (id 381461551), cruzados
+        # com os mais ouvidos no Spotify.
+        "Pimba Pimba", "O Ritmo do Amor (Kuduro)", "Vamos a Elas",
+        "Baby, És uma Bomba", "Rapaziada Vamos Dançar", "Dança da Paixão",
     ],
     "Ana Malhoa": [
         "Sube la Temperatura", "Tá Turbinada",
@@ -881,6 +901,13 @@ async def explorar_artista(artista: str) -> list[dict]:
         except Exception:
             continue
         if not achadas or not achadas[0].get("preview"):
+            continue
+        # A pesquisa acima é por nome, e o nome pode ser ambíguo (ver o caso
+        # T-Rex/T. Rex). Já sabemos qual é o artista certo — o id — por isso
+        # confirmamos que a faixa é mesmo dele antes de a aceitar.
+        id_da_faixa = (achadas[0].get("artist") or {}).get("id")
+        if id_da_faixa is not None and str(id_da_faixa) != str(artista_id):
+            print(f"[tugle]   {artista}: '{titulo}' pertence a outro artista com nome parecido — a ignorar")
             continue
         if achadas[0]["id"] in ids_vistos:
             continue
